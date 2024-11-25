@@ -18,7 +18,7 @@ func NewMetricsCollector(hub *metricshub.MetricsHub) echo.MiddlewareFunc {
 				ctx.Error(err)
 			}
 			processTime := fasttime.Since(startAt)
-			path := ctx.Request().URL.Path
+			path := ctx.Path()
 			method := ctx.Request().Method
 			code := ctx.Response().Status
 			bodyBytesReceived := ctx.Request().ContentLength
