@@ -10,8 +10,12 @@ import (
 )
 
 func main() {
+	config := &metricshub.MetricsHubConfig{
+		ServiceName: "vm-operator",
+		HostName:    "sprite-run-serverless-01",
+	}
 	// Initialize MetricsHub
-	mHub := metricshub.NewMetricsHub()
+	mHub := metricshub.NewMetricsHub(config)
 
 	// Create and register metrics
 	gauge := prometheus.NewGauge(prometheus.GaugeOpts{
@@ -31,7 +35,7 @@ func main() {
 	mHub.UpdateMetrics("example_counter", 1)
 
 	// Serve metrics
-	http.Handle("/metrics", mHub.HTTPhandler())
+	http.Handle("/metrics", mHub.HTTPHandler())
 	log.Println("Serving metrics at :8080/metrics")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }

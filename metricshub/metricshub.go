@@ -2,22 +2,74 @@ package metricshub
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+const (
+	// DefaultTimeTicker is the default time ticker for updating metrics.
+	DefaultTimeTicker = 5 * time.Second
+)
+
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
-type MetricsHub struct {
-	registry *prometheus.Registry
-	metrics  map[string]prometheus.Collector
-}
+type (
+	MetricsHubConfig struct {
+		ServiceName string `yaml:"serviceName" json:"serviceName"`
+		HostName    string `yaml:"hostName" json:"hostName"`
+	}
+
+	MetricsHub struct {
+		config          *MetricsHubConfig
+		registry        *prometheus.Registry
+		metrics         map[string]prometheus.Collector
+		internalMetrics *internalMetrics
+		internalStats   map[internalStatsKey]*HTTPStat
+	}
+
+	internalStatsKey struct {
+		Method string
+		Path   string
+	}
+
+	MetricCollector struct {
+		Collector prometheus.Collector
+		Name      string
+		Method    string
+		Path      string
+		HttpStat  *HTTPStat
+	}
+)
 
 // NewMetricsHub initializes a new MetricsHub instance.
-func NewMetricsHub() *MetricsHub {
-	return &MetricsHub{
-		registry: prometheus.NewRegistry(),
-		metrics:  make(map[string]prometheus.Collector),
+func NewMetricsHub(config *MetricsHubConfig) *MetricsHub {
+	hub := &MetricsHub{
+		config:        config,
+		registry:      prometheus.NewRegistry(),
+		metrics:       make(map[string]prometheus.Collector),
+		internalStats: make(map[internalStatsKey]*HTTPStat),
+	}
+
+	// inject the internal metrics
+	hub.internalMetrics = hub.newInternalMetrics()
+
+	go hub.run()
+	return hub
+}
+
+func (hub *MetricsHub) run() {
+	ticker := time.NewTicker(DefaultTimeTicker)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			for key, stats := range hub.internalStats {
+				status := stats.Status()
+				hub.internalMetrics.exportPrometheusMetricsForTicker(status, key.Method, key.Path)
+			}
+		}
 	}
 }
 
@@ -30,8 +82,8 @@ func (hub *MetricsHub) RegisterMetric(name string, metric prometheus.Collector) 
 	return hub.registry.Register(metric)
 }
 
-// HTTPhandler returns an HTTP handler for the metrics endpoint.
-func (hub *MetricsHub) HTTPhandler() http.Handler {
+// HTTPHandler returns an HTTP handler for the metrics endpoint.
+func (hub *MetricsHub) HTTPHandler() http.Handler {
 	return promhttp.HandlerFor(hub.registry, promhttp.HandlerOpts{})
 }
 
@@ -48,7 +100,7 @@ func (hub *MetricsHub) CurrentMetrics() []string {
 func (hub *MetricsHub) UpdateMetrics(name string, value float64) error {
 	metric, exists := hub.metrics[name]
 	if !exists {
-		return nil // Metric not found
+		return nil // RequestMetric not found
 	}
 
 	// Check if the metric is a Gauge or Counter and update accordingly.
@@ -59,4 +111,32 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64) error {
 		m.Add(value)
 	}
 	return nil
+}
+
+func (hub *MetricsHub) UpdateInternalMetrics(requestMetric *RequestMetric, method, path string) {
+	key := internalStatsKey{
+		Method: method,
+		Path:   path,
+	}
+
+	stat, exists := hub.internalStats[key]
+	if !exists {
+		stat = NewHTTPStat()
+		hub.internalStats[key] = stat
+	}
+
+	if stat == nil {
+		return
+	}
+
+	if hub.internalMetrics == nil {
+		return
+	}
+
+	if requestMetric == nil {
+		return
+	}
+
+	stat.Stat(requestMetric)
+	hub.internalMetrics.exportPrometheusMetricsForRequestMetric(requestMetric, method, path)
 }
