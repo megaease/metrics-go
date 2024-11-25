@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	dto "github.com/prometheus/client_model/go"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -65,6 +67,11 @@ type (
 		Method     string
 		Path       string
 		HTTPStatus *HTTPStat
+	}
+
+	mergeMetric struct {
+		Labels map[string]string
+		value  float64
 	}
 )
 
@@ -133,11 +140,11 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, selectLabels ma
 
 	// Check if the metric is a Gauge or Counter and update accordingly.
 	switch m := metric.(type) {
-	case prometheus.GaugeVec:
+	case *prometheus.GaugeVec:
 		m.With(selectLabels).Set(value)
 	case prometheus.Gauge:
 		m.Set(value)
-	case prometheus.CounterVec:
+	case *prometheus.CounterVec:
 		if value > 1 {
 			m.With(selectLabels).Add(value)
 		} else {
@@ -149,11 +156,11 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, selectLabels ma
 		} else {
 			m.Inc()
 		}
-	case prometheus.SummaryVec:
+	case *prometheus.SummaryVec:
 		m.With(selectLabels).Observe(value)
 	case prometheus.Summary:
 		m.Observe(value)
-	case prometheus.HistogramVec:
+	case *prometheus.HistogramVec:
 		m.With(selectLabels).Observe(value)
 	case prometheus.Histogram:
 		m.Observe(value)
@@ -230,4 +237,125 @@ func (hub *MetricsHub) NotifySlack(msg string) error {
 		return fmt.Errorf("error response from Slack - code [%d] - msg [%s]", resp.StatusCode, string(buf))
 	}
 	return nil
+}
+
+func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedLabels []string, metricType string) ([]mergeMetric, error) {
+	mfs := make(chan prometheus.Metric)
+	go func() {
+		metric.Collect(mfs)
+		close(mfs)
+	}()
+
+	groupedValues := make(map[string]float64)
+	groupedLabels := make(map[string]map[string]string)
+
+	for mf := range mfs {
+		m := &dto.Metric{}
+		err := mf.Write(m)
+		if err != nil {
+			return nil, err
+		}
+
+		compositeKeyParts := make([]string, len(labels))
+		metricLabels := m.GetLabel()
+		mergedMetric := false
+		for i := range metricLabels {
+			if metricLabels[i].GetValue() == "merged" {
+				mergedMetric = true
+			}
+		}
+		if mergedMetric {
+			continue
+		}
+
+		newLabels := make(map[string]string)
+		for _, label := range labels {
+			for i := range metricLabels {
+				if metricLabels[i].GetName() == label {
+					compositeKeyParts = append(compositeKeyParts, metricLabels[i].GetValue())
+					newLabels[label] = metricLabels[i].GetValue()
+					break
+				}
+			}
+		}
+		compositeKey := strings.Join(compositeKeyParts, "，")
+
+		value := hub.getMetricValue(m, metricType)
+		if _, exists := groupedValues[compositeKey]; !exists {
+			groupedValues[compositeKey] = value
+			groupedLabels[compositeKey] = make(map[string]string)
+			groupedLabels[compositeKey] = newLabels
+		} else {
+			groupedValues[compositeKey] += value
+		}
+	}
+
+	var mergedMetrics []mergeMetric
+	for key, groupLabels := range groupedLabels {
+		for _, label := range mergedLabels {
+			groupLabels[label] = "merged"
+		}
+		value := groupedValues[key]
+		mergedMetrics = append(mergedMetrics, mergeMetric{
+			Labels: groupLabels,
+			value:  value,
+		})
+	}
+	return mergedMetrics, nil
+}
+
+func (hub *MetricsHub) MergeMetric(metric prometheus.Collector, labels, mergedLabels []string) error {
+	switch m := metric.(type) {
+	case *prometheus.GaugeVec:
+		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "gauge")
+		if err != nil {
+			return err
+		}
+		for _, mergedMetric := range mergedMetrics {
+			m.With(mergedMetric.Labels).Set(mergedMetric.value)
+		}
+	case *prometheus.CounterVec:
+		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "counter")
+		if err != nil {
+			return err
+		}
+		for _, mergedMetric := range mergedMetrics {
+			m.With(mergedMetric.Labels).Add(mergedMetric.value)
+		}
+	case *prometheus.SummaryVec:
+		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "summary")
+		if err != nil {
+			return err
+		}
+		for _, mergedMetric := range mergedMetrics {
+			m.With(mergedMetric.Labels).Observe(mergedMetric.value)
+		}
+	case *prometheus.HistogramVec:
+		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "histogram")
+		if err != nil {
+			return err
+		}
+		for _, mergedMetric := range mergedMetrics {
+			m.With(mergedMetric.Labels).Observe(mergedMetric.value)
+		}
+	default:
+		return errors.New("unsupported metric type")
+	}
+
+	return nil
+}
+
+func (hub *MetricsHub) getMetricValue(m *dto.Metric, metricType string) float64 {
+	switch metricType {
+	case "gauge":
+		return m.GetGauge().GetValue()
+	case "counter":
+		return m.GetCounter().GetValue()
+	case "summary":
+		return m.GetSummary().GetSampleSum()
+	case "histogram":
+		return m.GetHistogram().GetSampleSum()
+	default:
+		return 0
+	}
 }
