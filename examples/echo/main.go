@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/megaease/metrics-go/metricshub"
@@ -29,6 +30,7 @@ func main() {
 		if component == "" {
 			return c.JSON(400, "component is required")
 		}
+		time.Sleep(1 * time.Second)
 		log.Printf("health check for component: %s", component)
 		return c.JSON(200, "ok")
 	})

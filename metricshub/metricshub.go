@@ -46,7 +46,7 @@ type (
 func NewMetricsHub(config *MetricsHubConfig) *MetricsHub {
 	hub := &MetricsHub{
 		config:        config,
-		registry:      prometheus.NewRegistry(),
+		registry:      prometheus.DefaultRegisterer.(*prometheus.Registry),
 		metrics:       make(map[string]prometheus.Collector),
 		internalStats: make(map[internalStatsKey]*HTTPStat),
 	}
@@ -84,7 +84,7 @@ func (hub *MetricsHub) RegisterMetric(name string, metric prometheus.Collector) 
 
 // HTTPHandler returns an HTTP handler for the metrics endpoint.
 func (hub *MetricsHub) HTTPHandler() http.Handler {
-	return promhttp.HandlerFor(hub.registry, promhttp.HandlerOpts{})
+	return promhttp.Handler()
 }
 
 // CurrentMetrics returns a snapshot of all registered metrics.
