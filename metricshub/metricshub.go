@@ -1,6 +1,10 @@
 package metricshub
 
 import (
+	"bytes"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -13,13 +17,17 @@ const (
 	// It is set to 5 seconds to match the default interval used by go-metrics.
 	// https://github.com/rcrowley/go-metrics/blob/3113b8401b8a98917cde58f8bbd42a1b1c03b1fd/ewma.go#L98-L99
 	httpStatusUpdateInterval = 5 * time.Second
+
+	defaultSlackWebhookURL = "https://hooks.slack.com/services/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"
 )
 
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
 type (
 	MetricsHubConfig struct {
-		ServiceName string `yaml:"serviceName" json:"serviceName"`
-		HostName    string `yaml:"hostName" json:"hostName"`
+		ServiceName     string            `yaml:"serviceName" json:"serviceName"`
+		HostName        string            `yaml:"hostName" json:"hostName"`
+		Labels          map[string]string `yaml:"labels" json:"labels"`
+		SlackWebhookURL string            `yaml:"slackWebhookURL" json:"slackWebhookURL"`
 	}
 
 	MetricsHub struct {
@@ -99,7 +107,7 @@ func (hub *MetricsHub) CurrentMetrics() []string {
 }
 
 // UpdateMetrics allows dynamic updates to a specific metric by its name.
-func (hub *MetricsHub) UpdateMetrics(name string, value float64) error {
+func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[string]string) error {
 	metric, exists := hub.metrics[name]
 	if !exists {
 		return nil // RequestMetric not found
@@ -107,10 +115,36 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64) error {
 
 	// Check if the metric is a Gauge or Counter and update accordingly.
 	switch m := metric.(type) {
+	case prometheus.GaugeVec:
+		m.With(labels).Set(value)
 	case prometheus.Gauge:
 		m.Set(value)
+	case prometheus.CounterVec:
+		if value > 1 {
+			m.With(labels).Add(value)
+		} else {
+			m.With(labels).Inc()
+		}
 	case prometheus.Counter:
-		m.Add(value)
+		if value > 1 {
+			m.Add(value)
+		} else {
+			m.Inc()
+		}
+	case prometheus.SummaryVec:
+		m.With(labels).Observe(value)
+	case prometheus.Summary:
+		m.Observe(value)
+	case prometheus.HistogramVec:
+		m.With(labels).Observe(value)
+	case prometheus.Histogram:
+		m.Observe(value)
+	case prometheus.ObserverVec:
+		m.With(labels).Observe(value)
+	case prometheus.Observer:
+		m.Observe(value)
+	default:
+		return errors.New("unsupported metric type")
 	}
 	return nil
 }
@@ -141,4 +175,35 @@ func (hub *MetricsHub) UpdateHTTPRequestMetrics(requestMetric *RequestMetric, me
 
 	stat.Stat(requestMetric)
 	hub.httpMetrics.exportPrometheusMetricsForRequestMetric(requestMetric, method, path)
+}
+
+func (hub *MetricsHub) NotifySlack(msg string) error {
+	if hub.config.SlackWebhookURL == "" {
+		hub.config.SlackWebhookURL = defaultSlackWebhookURL
+	}
+
+	req, err := http.NewRequest(http.MethodPost, hub.config.SlackWebhookURL, bytes.NewBuffer([]byte(msg)))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Close = true
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	buf, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != 200 {
+		return fmt.Errorf("error response from Slack - code [%d] - msg [%s]", resp.StatusCode, string(buf))
+	}
+	return nil
 }
