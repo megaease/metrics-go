@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"strings"
-
 	echo "github.com/labstack/echo/v4"
 
 	"github.com/megaease/metrics-go/metricshub"
@@ -25,12 +23,9 @@ func NewMetricsCollector(hub *metricshub.MetricsHub) echo.MiddlewareFunc {
 			bodyBytesReceived := ctx.Request().ContentLength
 			bodyBytesSent := ctx.Response().Size
 
+			// We just use the registered router path as the group path.
 			groupPath := path
 
-			// TODO: Support more complex path.
-			if strings.Contains(path, "/:") {
-				groupPath = strings.Split(path, "/:")[0]
-			}
 			requestMetric := &metricshub.RequestMetric{
 				StatusCode: code,
 				Duration:   processTime,
