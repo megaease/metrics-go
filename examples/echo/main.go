@@ -18,6 +18,9 @@ func main() {
 	config := &metricshub.MetricsHubConfig{
 		ServiceName: "vm-operator-echo",
 		HostName:    "sprite-run-serverless-01",
+		Labels: map[string]string{
+			"env": "dev",
+		},
 	}
 	// Initialize MetricsHub
 	mHub := metricshub.NewMetricsHub(config)

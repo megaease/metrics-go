@@ -48,6 +48,12 @@ func (hub *MetricsHub) newHTTPMetrics() *httpRequestMetrics {
 		"hostName":    hub.config.HostName,
 	}
 	httpserverLabels := []string{"serviceName", "hostName", "method", "path"}
+	if hub.config.Labels != nil {
+		for k, v := range hub.config.Labels {
+			commonLabels[k] = v
+			httpserverLabels = append(httpserverLabels, k)
+		}
+	}
 
 	return &httpRequestMetrics{
 		TotalRequests: hub.NewCounter(
