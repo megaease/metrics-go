@@ -5,8 +5,8 @@ import (
 )
 
 type (
-	// internalMetrics is the statistics tool for HTTP traffic.
-	internalMetrics struct {
+	// httpRequestMetrics is the statistics tool for HTTP traffic.
+	httpRequestMetrics struct {
 		TotalRequests               *prometheus.CounterVec
 		TotalResponses              *prometheus.CounterVec
 		TotalErrorRequests          *prometheus.CounterVec
@@ -41,15 +41,15 @@ type (
 	}
 )
 
-// newInternalMetrics create the HttpServerMetrics.
-func (hub *MetricsHub) newInternalMetrics() *internalMetrics {
+// newHTTPMetrics create the HttpServerMetrics.
+func (hub *MetricsHub) newHTTPMetrics() *httpRequestMetrics {
 	commonLabels := prometheus.Labels{
 		"serviceName": hub.config.ServiceName,
 		"hostName":    hub.config.HostName,
 	}
 	httpserverLabels := []string{"serviceName", "hostName", "method", "path"}
 
-	return &internalMetrics{
+	return &httpRequestMetrics{
 		TotalRequests: hub.NewCounter(
 			"service_total_requests",
 			"the total count of http requests",
@@ -191,7 +191,7 @@ func (hub *MetricsHub) newInternalMetrics() *internalMetrics {
 	}
 }
 
-func (m *internalMetrics) exportPrometheusMetricsForTicker(status *Status, method, path string) {
+func (m *httpRequestMetrics) exportPrometheusMetricsForTicker(status *Status, method, path string) {
 	labels := prometheus.Labels{
 		"method": method,
 		"path":   path,
@@ -220,7 +220,7 @@ func (m *internalMetrics) exportPrometheusMetricsForTicker(status *Status, metho
 	m.RespSize.With(labels).Set(float64(status.RespSize))
 }
 
-func (m *internalMetrics) exportPrometheusMetricsForRequestMetric(stat *RequestMetric, method, path string) {
+func (m *httpRequestMetrics) exportPrometheusMetricsForRequestMetric(stat *RequestMetric, method, path string) {
 	labels := prometheus.Labels{
 		"method": method,
 		"path":   path,

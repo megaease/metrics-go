@@ -21,40 +21,40 @@ type (
 	}
 
 	MetricsHub struct {
-		config          *MetricsHubConfig
-		registry        *prometheus.Registry
-		metrics         map[string]prometheus.Collector
-		internalMetrics *internalMetrics
-		internalStats   map[internalStatsKey]*HTTPStat
+		config      *MetricsHubConfig
+		registry    *prometheus.Registry
+		metrics     map[string]prometheus.Collector
+		httpMetrics *httpRequestMetrics
+		httpStats   map[httpStatsKey]*HTTPStat
 	}
 
-	internalStatsKey struct {
+	httpStatsKey struct {
 		Method string
 		Path   string
 	}
 
 	MetricCollector struct {
-		Collector prometheus.Collector
-		Name      string
-		Method    string
-		Path      string
-		HttpStat  *HTTPStat
+		Collector  prometheus.Collector
+		Name       string
+		Method     string
+		Path       string
+		HTTPStatus *HTTPStat
 	}
 )
 
 // NewMetricsHub initializes a new MetricsHub instance.
 func NewMetricsHub(config *MetricsHubConfig) *MetricsHub {
 	hub := &MetricsHub{
-		config:        config,
-		registry:      prometheus.DefaultRegisterer.(*prometheus.Registry),
-		metrics:       make(map[string]prometheus.Collector),
-		internalStats: make(map[internalStatsKey]*HTTPStat),
+		config:    config,
+		registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
+		metrics:   make(map[string]prometheus.Collector),
+		httpStats: make(map[httpStatsKey]*HTTPStat),
 	}
 
-	// inject the internal metrics
-	hub.internalMetrics = hub.newInternalMetrics()
+	hub.httpMetrics = hub.newHTTPMetrics()
 
 	go hub.run()
+
 	return hub
 }
 
@@ -65,9 +65,9 @@ func (hub *MetricsHub) run() {
 	for {
 		select {
 		case <-ticker.C:
-			for key, stats := range hub.internalStats {
+			for key, stats := range hub.httpStats {
 				status := stats.Status()
-				hub.internalMetrics.exportPrometheusMetricsForTicker(status, key.Method, key.Path)
+				hub.httpMetrics.exportPrometheusMetricsForTicker(status, key.Method, key.Path)
 			}
 		}
 	}
@@ -113,23 +113,23 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64) error {
 	return nil
 }
 
-func (hub *MetricsHub) UpdateInternalMetrics(requestMetric *RequestMetric, method, path string) {
-	key := internalStatsKey{
+func (hub *MetricsHub) UpdateHTTPRequestMetrics(requestMetric *RequestMetric, method, path string) {
+	key := httpStatsKey{
 		Method: method,
 		Path:   path,
 	}
 
-	stat, exists := hub.internalStats[key]
+	stat, exists := hub.httpStats[key]
 	if !exists {
 		stat = NewHTTPStat()
-		hub.internalStats[key] = stat
+		hub.httpStats[key] = stat
 	}
 
 	if stat == nil {
 		return
 	}
 
-	if hub.internalMetrics == nil {
+	if hub.httpMetrics == nil {
 		return
 	}
 
@@ -138,5 +138,5 @@ func (hub *MetricsHub) UpdateInternalMetrics(requestMetric *RequestMetric, metho
 	}
 
 	stat.Stat(requestMetric)
-	hub.internalMetrics.exportPrometheusMetricsForRequestMetric(requestMetric, method, path)
+	hub.httpMetrics.exportPrometheusMetricsForRequestMetric(requestMetric, method, path)
 }
