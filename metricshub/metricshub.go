@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	// DefaultTimeTicker is the default time ticker for updating metrics.
-	DefaultTimeTicker = 5 * time.Second
+	// httpStatusUpdateInterval is the interval for updating HTTP status metrics.
+	// It is set to 5 seconds to match the default interval used by go-metrics.
+	// https://github.com/rcrowley/go-metrics/blob/3113b8401b8a98917cde58f8bbd42a1b1c03b1fd/ewma.go#L98-L99
+	httpStatusUpdateInterval = 5 * time.Second
 )
 
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
@@ -59,7 +61,7 @@ func NewMetricsHub(config *MetricsHubConfig) *MetricsHub {
 }
 
 func (hub *MetricsHub) run() {
-	ticker := time.NewTicker(DefaultTimeTicker)
+	ticker := time.NewTicker(httpStatusUpdateInterval)
 	defer ticker.Stop()
 
 	for {
