@@ -1,8 +1,9 @@
 package middleware
 
 import (
-	echo "github.com/labstack/echo/v4"
 	"strings"
+
+	echo "github.com/labstack/echo/v4"
 
 	"github.com/megaease/metrics-go/metricshub"
 	"github.com/megaease/metrics-go/utils/fasttime"
@@ -36,7 +37,7 @@ func NewMetricsCollector(hub *metricshub.MetricsHub) echo.MiddlewareFunc {
 				ReqSize:    uint64(bodyBytesReceived),
 				RespSize:   uint64(bodyBytesSent),
 			}
-			hub.UpdateInternalMetrics(requestMetric, method, groupPath)
+			hub.UpdateHTTPRequestMetrics(requestMetric, method, groupPath)
 
 			return err
 		}
