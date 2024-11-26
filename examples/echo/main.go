@@ -17,12 +17,12 @@ func main() {
 	app.HidePort = true
 
 	config := &metricshub.MetricsHubConfig{
-		ServiceName: "vm-operator",
+		ServiceName: "vm-operator-echo",
 		HostName:    "sprite-run-serverless-01",
 	}
 	// Initialize MetricsHub
 	mHub := metricshub.NewMetricsHub(config)
-	app.Use(middleware.NewMetricsCollector(mHub))
+	app.Use(middleware.NewEchoMetricsCollector(mHub))
 
 	app.GET("/metrics", echo.WrapHandler(mHub.HTTPHandler()))
 	app.GET("/health/:component", func(c echo.Context) error {

@@ -7,7 +7,8 @@ import (
 	"github.com/megaease/metrics-go/utils/fasttime"
 )
 
-func NewMetricsCollector(hub *metricshub.MetricsHub) echo.MiddlewareFunc {
+// NewEchoMetricsCollector creates a Echo middleware to collect HTTP request metrics.
+func NewEchoMetricsCollector(hub *metricshub.MetricsHub) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
 			startAt := fasttime.Now()
