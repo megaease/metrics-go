@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/megaease/metrics-go/metricshub"
@@ -24,17 +23,14 @@ func main() {
 
 	router.Use(middleware.NewGinMetricsCollector(mHub))
 
-	// Route to serve metrics
 	router.GET("/metrics", gin.WrapH(mHub.HTTPHandler()))
 
-	// Health check route
 	router.GET("/health/:component", func(c *gin.Context) {
 		component := c.Param("component")
 		if component == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "component is required"})
 			return
 		}
-		time.Sleep(1 * time.Second)
 		log.Printf("health check for component: %s", component)
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
