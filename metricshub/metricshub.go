@@ -18,16 +18,32 @@ const (
 	// https://github.com/rcrowley/go-metrics/blob/3113b8401b8a98917cde58f8bbd42a1b1c03b1fd/ewma.go#L98-L99
 	httpStatusUpdateInterval = 5 * time.Second
 
+	// defaultSlackWebhookURL is the default webhook URL for Slack notifications.
+	// It will send the notifications to the #online-alert channel.
 	defaultSlackWebhookURL = "https://hooks.slack.com/services/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"
 )
 
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
 type (
 	MetricsHubConfig struct {
-		ServiceName     string            `yaml:"serviceName" json:"serviceName"`
-		HostName        string            `yaml:"hostName" json:"hostName"`
-		Labels          map[string]string `yaml:"labels" json:"labels"`
-		SlackWebhookURL string            `yaml:"slackWebhookURL" json:"slackWebhookURL"`
+		// ServiceName is the name of the service. It is required.
+		// The service name will be used as a label in the http metrics.
+		// Other custom metrics will not add this label, should be added manually.
+		ServiceName string `yaml:"serviceName" json:"serviceName"`
+		// HostName is the hostname of the service. It is required.
+		// The hostname will be used as a label in the http metrics.
+		// Other custom metrics will not add this label, should be added manually.
+		HostName string `yaml:"hostName" json:"hostName"`
+		// Labels is the additional labels for the service.
+		// This labels will be added to the http metrics.
+		// Other custom metrics will not add this label, should be added manually.
+		// +optional
+		Labels map[string]string `yaml:"labels" json:"labels"`
+		// SlackWebhookURL is the webhook URL for Slack notifications.
+		// If not set, the default value will be used when sending notifications.
+		// So be sure to set this value if you want to receive notifications.
+		// +optional
+		SlackWebhookURL string `yaml:"slackWebhookURL" json:"slackWebhookURL"`
 	}
 
 	MetricsHub struct {
@@ -84,6 +100,7 @@ func (hub *MetricsHub) run() {
 }
 
 // RegisterMetric registers a new Prometheus metric with the hub.
+// If the metric is not unique, should use *Vec type, not *Gauge or *Counter.
 func (hub *MetricsHub) RegisterMetric(name string, metric prometheus.Collector) error {
 	if _, exists := hub.metrics[name]; exists {
 		return nil // Already registered
@@ -97,7 +114,7 @@ func (hub *MetricsHub) HTTPHandler() http.Handler {
 	return promhttp.Handler()
 }
 
-// CurrentMetrics returns a snapshot of all registered metrics.
+// CurrentMetrics returns a snapshot of all custom metrics registered with the hub.
 func (hub *MetricsHub) CurrentMetrics() []string {
 	var metricNames []string
 	for name := range hub.metrics {
@@ -107,6 +124,7 @@ func (hub *MetricsHub) CurrentMetrics() []string {
 }
 
 // UpdateMetrics allows dynamic updates to a specific metric by its name.
+// Labels are optional and only used for *Vec types.
 func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[string]string) error {
 	metric, exists := hub.metrics[name]
 	if !exists {
@@ -149,6 +167,9 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[stri
 	return nil
 }
 
+// UpdateHTTPRequestMetrics updates the HTTP request metrics.
+// Do not call this method directly, use the middleware instead.
+// Or only when you need to call the third-party API, and statistics are needed.
 func (hub *MetricsHub) UpdateHTTPRequestMetrics(requestMetric *RequestMetric, method, path string) {
 	key := httpStatsKey{
 		Method: method,
@@ -177,6 +198,9 @@ func (hub *MetricsHub) UpdateHTTPRequestMetrics(requestMetric *RequestMetric, me
 	hub.httpMetrics.exportPrometheusMetricsForRequestMetric(requestMetric, method, path)
 }
 
+// NotifySlack sends a message to the Slack webhook.
+// If the webhook URL is not set, the default value will be used.
+// So be sure to set the webhook URL if you want to receive notifications.
 func (hub *MetricsHub) NotifySlack(msg string) error {
 	if hub.config.SlackWebhookURL == "" {
 		hub.config.SlackWebhookURL = defaultSlackWebhookURL
