@@ -35,6 +35,7 @@ func main() {
 		return c.JSON(200, "ok")
 	})
 
+	log.Printf("Serving metrics at :8080/metrics")
 	err := app.Start(fmt.Sprintf(":%d", 8080))
 	if err != nil {
 		log.Fatalf("failed to start server: %v", err)
