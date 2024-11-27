@@ -125,7 +125,7 @@ func (hub *MetricsHub) CurrentMetrics() []string {
 
 // UpdateMetrics allows dynamic updates to a specific metric by its name.
 // Labels are optional and only used for *Vec types.
-func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[string]string) error {
+func (hub *MetricsHub) UpdateMetrics(name string, value float64, selectLabels map[string]string) error {
 	metric, exists := hub.metrics[name]
 	if !exists {
 		return nil // RequestMetric not found
@@ -134,14 +134,14 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[stri
 	// Check if the metric is a Gauge or Counter and update accordingly.
 	switch m := metric.(type) {
 	case prometheus.GaugeVec:
-		m.With(labels).Set(value)
+		m.With(selectLabels).Set(value)
 	case prometheus.Gauge:
 		m.Set(value)
 	case prometheus.CounterVec:
 		if value > 1 {
-			m.With(labels).Add(value)
+			m.With(selectLabels).Add(value)
 		} else {
-			m.With(labels).Inc()
+			m.With(selectLabels).Inc()
 		}
 	case prometheus.Counter:
 		if value > 1 {
@@ -150,15 +150,15 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[stri
 			m.Inc()
 		}
 	case prometheus.SummaryVec:
-		m.With(labels).Observe(value)
+		m.With(selectLabels).Observe(value)
 	case prometheus.Summary:
 		m.Observe(value)
 	case prometheus.HistogramVec:
-		m.With(labels).Observe(value)
+		m.With(selectLabels).Observe(value)
 	case prometheus.Histogram:
 		m.Observe(value)
 	case prometheus.ObserverVec:
-		m.With(labels).Observe(value)
+		m.With(selectLabels).Observe(value)
 	case prometheus.Observer:
 		m.Observe(value)
 	default:
