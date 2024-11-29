@@ -264,7 +264,7 @@ func (hub *MetricsHub) NotifySlack(msg string) error {
 	return nil
 }
 
-func (hub *MetricsHub) CollectMetrics(name string, mergedLabels []string) error {
+func (hub *MetricsHub) CollectMergedMetrics(name string, mergedLabels []string) error {
 	reg, exists := hub.metricsRegistrations[name]
 	if !exists {
 		return errors.New("metric not found")

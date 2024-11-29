@@ -68,7 +68,7 @@ func TestMergedMetrics1(t *testing.T) {
 		"node":    "ds04",
 		"spec":    "4060",
 	})
-	err := metricsHub.CollectMetrics("example_gauge", []string{"node"})
+	err := metricsHub.CollectMergedMetrics("example_gauge", []string{"node"})
 	assert.NoError(t, err)
 
 	collector := metricsHub.GetCollector("example_gauge")
@@ -126,7 +126,7 @@ func TestMergedMetrics2(t *testing.T) {
 		"spec":    "4060",
 	})
 
-	err := metricsHub.CollectMetrics("example_gauge", []string{"node", "cluster"})
+	err := metricsHub.CollectMergedMetrics("example_gauge", []string{"node", "cluster"})
 	assert.NoError(t, err)
 	collector := metricsHub.GetCollector("example_gauge")
 
