@@ -150,7 +150,7 @@ func (hub *MetricsHub) RegisterMetric(reg *MetricRegistration) error {
 
 	reg.collector = collector
 
-	return hub.registry.Register(collector)
+	return nil
 }
 
 func (hub *MetricsHub) GetCollector(name string) prometheus.Collector {

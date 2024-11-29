@@ -46,7 +46,8 @@ func TestMergedMetrics1(t *testing.T) {
 		Type:      MetricTypeGaugeVec,
 		LabelKeys: []string{"cluster", "node", "spec"},
 	}
-	metricsHub.RegisterMetric(reg)
+	err := metricsHub.RegisterMetric(reg)
+	assert.NoError(t, err)
 
 	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
 		"cluster": "1001",
@@ -68,7 +69,7 @@ func TestMergedMetrics1(t *testing.T) {
 		"node":    "ds04",
 		"spec":    "4060",
 	})
-	err := metricsHub.CollectMergedMetrics("example_gauge", []string{"node"})
+	err = metricsHub.CollectMergedMetrics("example_gauge", []string{"node"})
 	assert.NoError(t, err)
 
 	collector := metricsHub.GetCollector("example_gauge")
