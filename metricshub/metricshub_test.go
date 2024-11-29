@@ -34,39 +34,49 @@ func printGaugeVec(m *prometheus.GaugeVec) {
 }
 
 func TestMergedMetrics1(t *testing.T) {
-	gaugeVec := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "example_counter",
-			Help: "An example counter vector",
-		},
-		[]string{"cluster", "node", "spec"},
-	)
-
-	gaugeVec.WithLabelValues("1001", "ds01", "4090").Set(8)
-	gaugeVec.WithLabelValues("1001", "ds02", "4060").Set(7)
-	gaugeVec.WithLabelValues("1001", "ds03", "4060").Set(8)
-	gaugeVec.WithLabelValues("1002", "ds04", "4060").Set(8)
-
 	metricsHub := NewMetricsHub(&MetricsHubConfig{
 		ServiceName: "test",
 		HostName:    "test",
 		Labels:      nil,
 	})
 
-	printGaugeVec(gaugeVec)
+	metricsHub.RegisterMetric(&MetricRegistration{
+		Name:               "example_gauge",
+		Help:               "An example gauge vector",
+		Type:               MetricTypeGaugeVec,
+		LabelKeys:          []string{"cluster", "node", "spec"},
+		AutoMerge:          true,
+		AutoMergeLabelKeys: []string{"node"},
+	})
 
-	err := metricsHub.MergeMetric(gaugeVec, []string{"cluster", "spec"}, []string{"node"})
-	if err != nil {
-		t.Errorf("merge metric failed: %v", err)
-	}
+	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
+		"cluster": "1001",
+		"node":    "ds01",
+		"spec":    "4090",
+	})
+	metricsHub.UpdateMetrics("example_gauge", 7.0, map[string]string{
+		"cluster": "1001",
+		"node":    "ds02",
+		"spec":    "4060",
+	})
+	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
+		"cluster": "1001",
+		"node":    "ds03",
+		"spec":    "4060",
+	})
+	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
+		"cluster": "1002",
+		"node":    "ds04",
+		"spec":    "4060",
+	})
 
-	fmt.Printf("--- after merge ---\n")
+	collector := metricsHub.GetCollector("example_gauge")
 
-	printGaugeVec(gaugeVec)
+	printGaugeVec(collector.(*prometheus.GaugeVec))
 
 	mfs := make(chan prometheus.Metric)
 	go func() {
-		gaugeVec.Collect(mfs)
+		collector.Collect(mfs)
 		close(mfs)
 	}()
 
@@ -81,39 +91,49 @@ func TestMergedMetrics1(t *testing.T) {
 }
 
 func TestMergedMetrics2(t *testing.T) {
-	gaugeVec := prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: "example_counter",
-			Help: "An example counter vector",
-		},
-		[]string{"cluster", "node", "spec"},
-	)
-
-	gaugeVec.WithLabelValues("1001", "ds01", "4090").Set(8)
-	gaugeVec.WithLabelValues("1001", "ds02", "4060").Set(7)
-	gaugeVec.WithLabelValues("1001", "ds03", "4060").Set(8)
-	gaugeVec.WithLabelValues("1001", "ds04", "4090").Set(8)
-
 	metricsHub := NewMetricsHub(&MetricsHubConfig{
 		ServiceName: "test",
 		HostName:    "test",
 		Labels:      nil,
 	})
 
-	printGaugeVec(gaugeVec)
+	metricsHub.RegisterMetric(&MetricRegistration{
+		Name:               "example_gauge",
+		Help:               "An example gauge vector",
+		Type:               MetricTypeGaugeVec,
+		LabelKeys:          []string{"cluster", "node", "spec"},
+		AutoMerge:          true,
+		AutoMergeLabelKeys: []string{"node", "cluster"},
+	})
 
-	err := metricsHub.MergeMetric(gaugeVec, []string{"spec"}, []string{"node", "cluster"})
-	if err != nil {
-		t.Errorf("merge metric failed: %v", err)
-	}
+	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
+		"cluster": "1001",
+		"node":    "ds01",
+		"spec":    "4090",
+	})
+	metricsHub.UpdateMetrics("example_gauge", 7.0, map[string]string{
+		"cluster": "1001",
+		"node":    "ds02",
+		"spec":    "4060",
+	})
+	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
+		"cluster": "1001",
+		"node":    "ds03",
+		"spec":    "4060",
+	})
+	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
+		"cluster": "1002",
+		"node":    "ds04",
+		"spec":    "4060",
+	})
 
-	fmt.Printf("--- after merge ---\n")
+	collector := metricsHub.GetCollector("example_gauge")
 
-	printGaugeVec(gaugeVec)
+	printGaugeVec(collector.(*prometheus.GaugeVec))
 
 	mfs := make(chan prometheus.Metric)
 	go func() {
-		gaugeVec.Collect(mfs)
+		collector.Collect(mfs)
 		close(mfs)
 	}()
 

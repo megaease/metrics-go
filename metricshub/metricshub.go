@@ -27,6 +27,11 @@ const (
 
 	// MergedLabelValue is the placeholder value for merged metrics.
 	MergedLabelValue = "MERGED_LABEL"
+
+	MetricTypeGaugeVec     MetricType = "GaugeVec"
+	MetricTypeCounterVec   MetricType = "CounterVec"
+	MetricTypeSummaryVec   MetricType = "SummaryVec"
+	MetricTypeHistogramVec MetricType = "HistogramVec"
 )
 
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
@@ -53,11 +58,11 @@ type (
 	}
 
 	MetricsHub struct {
-		config      *MetricsHubConfig
-		registry    *prometheus.Registry
-		metrics     map[string]prometheus.Collector
-		httpMetrics *httpRequestMetrics
-		httpStats   map[httpStatsKey]*HTTPStat
+		config               *MetricsHubConfig
+		registry             *prometheus.Registry
+		metricsRegistrations map[string]*MetricRegistration
+		httpMetrics          *httpRequestMetrics
+		httpStats            map[httpStatsKey]*HTTPStat
 	}
 
 	httpStatsKey struct {
@@ -65,12 +70,30 @@ type (
 		Path   string
 	}
 
-	MetricCollector struct {
-		Collector  prometheus.Collector
-		Name       string
-		Method     string
-		Path       string
-		HTTPStatus *HTTPStat
+	MetricType string
+
+	MetricRegistration struct {
+		// Name must be unique.
+		Name string
+		// Only support GaugeVec, CounterVec, SummaryVec, HistogramVec, and ObserverVec.
+		Type MetricType
+		// Help is the description of the metric.
+		Help string
+		// LabelKeys is the list of label keys.
+		LabelKeys []string
+
+		// Only used for HistogramVec.
+		HistogramBuckets []float64
+		// Only used for SummaryVec.
+		SummaryObjectives map[float64]float64
+
+		// AutoMerge is the flag to enable auto-merging for the metric.
+		// If enabled, the metric will be merged based on AutoMergedLabelKeys.
+		// We only add the merged metric without removing the original metric.
+		AutoMerge          bool
+		AutoMergeLabelKeys []string
+
+		collector prometheus.Collector
 	}
 
 	mergeMetric struct {
@@ -82,10 +105,10 @@ type (
 // NewMetricsHub initializes a new MetricsHub instance.
 func NewMetricsHub(config *MetricsHubConfig) *MetricsHub {
 	hub := &MetricsHub{
-		config:    config,
-		registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
-		metrics:   make(map[string]prometheus.Collector),
-		httpStats: make(map[httpStatsKey]*HTTPStat),
+		config:               config,
+		registry:             prometheus.DefaultRegisterer.(*prometheus.Registry),
+		metricsRegistrations: make(map[string]*MetricRegistration),
+		httpStats:            make(map[httpStatsKey]*HTTPStat),
 	}
 
 	hub.httpMetrics = hub.newHTTPMetrics()
@@ -110,14 +133,34 @@ func (hub *MetricsHub) run() {
 	}
 }
 
-// RegisterMetric registers a new Prometheus metric with the hub.
-// If the metric is not unique, should use *Vec type, not *Gauge or *Counter.
-func (hub *MetricsHub) RegisterMetric(name string, metric prometheus.Collector) error {
-	if _, exists := hub.metrics[name]; exists {
-		return nil // Already registered
+// RegisterMetric registers a new metric with the hub.
+func (hub *MetricsHub) RegisterMetric(reg *MetricRegistration) error {
+	if _, exists := hub.metricsRegistrations[reg.Name]; exists {
+		return fmt.Errorf("metric %s already exists", reg.Name)
 	}
-	hub.metrics[name] = metric
-	return hub.registry.Register(metric)
+	hub.metricsRegistrations[reg.Name] = reg
+
+	var collector prometheus.Collector
+	switch reg.Type {
+	case MetricTypeGaugeVec:
+		collector = hub.NewGaugeVec(reg.Name, reg.Help, reg.LabelKeys)
+	case MetricTypeCounterVec:
+		collector = hub.NewCounterVec(reg.Name, reg.Help, reg.LabelKeys)
+	case MetricTypeHistogramVec:
+		collector = hub.NewHistogramVec(reg.Name, reg.Help, reg.LabelKeys, reg.HistogramBuckets)
+	case MetricTypeSummaryVec:
+		collector = hub.NewSummaryVec(reg.Name, reg.Help, reg.LabelKeys, reg.SummaryObjectives)
+	default:
+		return fmt.Errorf("unsupported metric type: %s", reg.Type)
+	}
+
+	reg.collector = collector
+
+	return hub.registry.Register(collector)
+}
+
+func (hub *MetricsHub) GetCollector(name string) prometheus.Collector {
+	return hub.metricsRegistrations[name].collector
 }
 
 // HTTPHandler returns an HTTP handler for the metrics endpoint.
@@ -128,7 +171,7 @@ func (hub *MetricsHub) HTTPHandler() http.Handler {
 // CurrentMetrics returns a snapshot of all custom metrics registered with the hub.
 func (hub *MetricsHub) CurrentMetrics() []string {
 	var metricNames []string
-	for name := range hub.metrics {
+	for name := range hub.metricsRegistrations {
 		metricNames = append(metricNames, name)
 	}
 	return metricNames
@@ -136,45 +179,36 @@ func (hub *MetricsHub) CurrentMetrics() []string {
 
 // UpdateMetrics allows dynamic updates to a specific metric by its name.
 // Labels are optional and only used for *Vec types.
-func (hub *MetricsHub) UpdateMetrics(name string, value float64, selectLabels map[string]string) error {
-	metric, exists := hub.metrics[name]
+func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[string]string) error {
+	metricReg, exists := hub.metricsRegistrations[name]
 	if !exists {
 		return nil // RequestMetric not found
 	}
 
-	// Check if the metric is a Gauge or Counter and update accordingly.
-	switch m := metric.(type) {
+	switch m := metricReg.collector.(type) {
 	case *prometheus.GaugeVec:
-		m.With(selectLabels).Set(value)
-	case prometheus.Gauge:
-		m.Set(value)
+		m.With(labels).Set(value)
 	case *prometheus.CounterVec:
 		if value > 1 {
-			m.With(selectLabels).Add(value)
+			m.With(labels).Add(value)
 		} else {
-			m.With(selectLabels).Inc()
-		}
-	case prometheus.Counter:
-		if value > 1 {
-			m.Add(value)
-		} else {
-			m.Inc()
+			m.With(labels).Inc()
 		}
 	case *prometheus.SummaryVec:
-		m.With(selectLabels).Observe(value)
-	case prometheus.Summary:
-		m.Observe(value)
+		m.With(labels).Observe(value)
 	case *prometheus.HistogramVec:
-		m.With(selectLabels).Observe(value)
-	case prometheus.Histogram:
-		m.Observe(value)
-	case prometheus.ObserverVec:
-		m.With(selectLabels).Observe(value)
-	case prometheus.Observer:
-		m.Observe(value)
+		m.With(labels).Observe(value)
 	default:
-		return errors.New("unsupported metric type")
+		return fmt.Errorf("BUG: unsupported metric type: %T", m)
 	}
+
+	if metricReg.AutoMerge {
+		err := hub.mergeMetrics(metricReg)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -243,10 +277,25 @@ func (hub *MetricsHub) NotifySlack(msg string) error {
 	return nil
 }
 
-func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedLabels []string, metricType string) ([]mergeMetric, error) {
+func (hub *MetricsHub) groupMetrics(reg *MetricRegistration) ([]mergeMetric, error) {
+	compositeLabelKeys := make([]string, 0)
+	for _, labelKey := range reg.LabelKeys {
+		isMergeKey := false
+		for _, mergeLabelKey := range reg.AutoMergeLabelKeys {
+			if labelKey == mergeLabelKey {
+				isMergeKey = true
+				break
+			}
+		}
+
+		if !isMergeKey {
+			compositeLabelKeys = append(compositeLabelKeys, labelKey)
+		}
+	}
+
 	mfs := make(chan prometheus.Metric)
 	go func() {
-		metric.Collect(mfs)
+		reg.collector.Collect(mfs)
 		close(mfs)
 	}()
 
@@ -260,7 +309,7 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 			return nil, err
 		}
 
-		compositeKeyParts := make([]string, 0, len(labels))
+		compositeKeyParts := make([]string, 0, len(compositeLabelKeys))
 		metricLabels := m.GetLabel()
 		mergedMetric := false
 		for i := range metricLabels {
@@ -273,7 +322,7 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 		}
 
 		newLabels := make(map[string]string)
-		for _, label := range labels {
+		for _, label := range compositeLabelKeys {
 			for i := range metricLabels {
 				if metricLabels[i].GetName() == label {
 					compositeKeyParts = append(compositeKeyParts, metricLabels[i].GetValue())
@@ -284,7 +333,7 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 		}
 		compositeKey := strings.Join(compositeKeyParts, ",")
 
-		value := hub.getMetricValue(m, metricType)
+		value := hub.getMetricValue(m, reg.Type)
 		if _, exists := groupedValues[compositeKey]; !exists {
 			groupedValues[compositeKey] = value
 			groupedLabels[compositeKey] = newLabels
@@ -295,8 +344,8 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 
 	var mergedMetrics []mergeMetric
 	for key, groupLabels := range groupedLabels {
-		for _, label := range mergedLabels {
-			groupLabels[label] = MergedLabelValue
+		for _, mergeLabel := range reg.AutoMergeLabelKeys {
+			groupLabels[mergeLabel] = MergedLabelValue
 		}
 		value := groupedValues[key]
 		mergedMetrics = append(mergedMetrics, mergeMetric{
@@ -307,10 +356,10 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 	return mergedMetrics, nil
 }
 
-func (hub *MetricsHub) MergeMetric(metric prometheus.Collector, labels, mergedLabels []string) error {
-	switch m := metric.(type) {
+func (hub *MetricsHub) mergeMetrics(reg *MetricRegistration) error {
+	switch m := reg.collector.(type) {
 	case *prometheus.GaugeVec:
-		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "gauge")
+		mergedMetrics, err := hub.groupMetrics(reg)
 		if err != nil {
 			return err
 		}
@@ -318,7 +367,7 @@ func (hub *MetricsHub) MergeMetric(metric prometheus.Collector, labels, mergedLa
 			m.With(mergedMetric.Labels).Set(mergedMetric.value)
 		}
 	case *prometheus.CounterVec:
-		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "counter")
+		mergedMetrics, err := hub.groupMetrics(reg)
 		if err != nil {
 			return err
 		}
@@ -326,7 +375,7 @@ func (hub *MetricsHub) MergeMetric(metric prometheus.Collector, labels, mergedLa
 			m.With(mergedMetric.Labels).Add(mergedMetric.value)
 		}
 	case *prometheus.SummaryVec:
-		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "summary")
+		mergedMetrics, err := hub.groupMetrics(reg)
 		if err != nil {
 			return err
 		}
@@ -334,7 +383,7 @@ func (hub *MetricsHub) MergeMetric(metric prometheus.Collector, labels, mergedLa
 			m.With(mergedMetric.Labels).Observe(mergedMetric.value)
 		}
 	case *prometheus.HistogramVec:
-		mergedMetrics, err := hub.groupMetrics(metric, labels, mergedLabels, "histogram")
+		mergedMetrics, err := hub.groupMetrics(reg)
 		if err != nil {
 			return err
 		}
@@ -348,15 +397,15 @@ func (hub *MetricsHub) MergeMetric(metric prometheus.Collector, labels, mergedLa
 	return nil
 }
 
-func (hub *MetricsHub) getMetricValue(m *dto.Metric, metricType string) float64 {
+func (hub *MetricsHub) getMetricValue(m *dto.Metric, metricType MetricType) float64 {
 	switch metricType {
-	case "gauge":
+	case MetricTypeGaugeVec:
 		return m.GetGauge().GetValue()
-	case "counter":
+	case MetricTypeCounterVec:
 		return m.GetCounter().GetValue()
-	case "summary":
+	case MetricTypeSummaryVec:
 		return m.GetSummary().GetSampleSum()
-	case "histogram":
+	case MetricTypeHistogramVec:
 		return m.GetHistogram().GetSampleSum()
 	default:
 		return 0

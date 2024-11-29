@@ -56,141 +56,129 @@ func (hub *MetricsHub) newHTTPMetrics() *httpRequestMetrics {
 	}
 
 	return &httpRequestMetrics{
-		TotalRequests: hub.NewCounter(
+		TotalRequests: hub.NewCounterVec(
 			"service_total_requests",
 			"the total count of http requests",
 			httpserverLabels).MustCurryWith(commonLabels),
-		TotalResponses: hub.NewCounter(
+		TotalResponses: hub.NewCounterVec(
 			"service_total_responses",
 			"the total count of http responses",
 			httpserverLabels).MustCurryWith(commonLabels),
-		TotalErrorRequests: hub.NewCounter(
+		TotalErrorRequests: hub.NewCounterVec(
 			"service_total_error_requests",
 			"the total count of http error requests",
 			httpserverLabels).MustCurryWith(commonLabels),
-		RequestsDuration: hub.NewHistogram(
-			prometheus.HistogramOpts{
-				Name:    "service_requests_duration",
-				Help:    "request processing duration histogram of a backend",
-				Buckets: DefaultDurationBuckets(),
-			},
-			httpserverLabels).MustCurryWith(commonLabels),
-		RequestSizeBytes: hub.NewHistogram(
-			prometheus.HistogramOpts{
-				Name:    "service_requests_size_bytes",
-				Help:    "a histogram of the total size of the request to a backend. Includes body",
-				Buckets: DefaultBodySizeBuckets(),
-			},
-			httpserverLabels).MustCurryWith(commonLabels),
-		ResponseSizeBytes: hub.NewHistogram(
-			prometheus.HistogramOpts{
-				Name:    "service_responses_size_bytes",
-				Help:    "a histogram of the total size of the returned response body from a backend",
-				Buckets: DefaultBodySizeBuckets(),
-			},
-			httpserverLabels).MustCurryWith(commonLabels),
-		RequestsDurationPercentage: hub.NewSummary(
-			prometheus.SummaryOpts{
-				Name:       "service_requests_duration_percentage",
-				Help:       "request processing duration summary of a backend",
-				Objectives: DefaultObjectives(),
-			},
-			httpserverLabels).MustCurryWith(commonLabels),
-		RequestSizeBytesPercentage: hub.NewSummary(
-			prometheus.SummaryOpts{
-				Name:       "service_requests_size_bytes_percentage",
-				Help:       "a summary of the total size of the request to a backend. Includes body",
-				Objectives: DefaultObjectives(),
-			},
-			httpserverLabels).MustCurryWith(commonLabels),
-		ResponseSizeBytesPercentage: hub.NewSummary(
-			prometheus.SummaryOpts{
-				Name:       "service_responses_size_bytes_percentage",
-				Help:       "a summary of the total size of the returned response body from a backend",
-				Objectives: DefaultObjectives(),
-			},
-			httpserverLabels).MustCurryWith(commonLabels),
-		M1: hub.NewGauge(
+		RequestsDuration: hub.NewHistogramVec(
+			"service_requests_duration",
+			"request processing duration histogram of a backend",
+			httpserverLabels,
+			DefaultDurationBuckets()).MustCurryWith(commonLabels),
+		RequestSizeBytes: hub.NewHistogramVec(
+			"service_requests_size_bytes",
+			"a histogram of the total size of the request to a backend. Includes body",
+			httpserverLabels,
+			DefaultBodySizeBuckets()).MustCurryWith(commonLabels),
+		ResponseSizeBytes: hub.NewHistogramVec(
+			"service_responses_size_bytes",
+			"a histogram of the total size of the returned response body from a backend",
+			httpserverLabels,
+			DefaultBodySizeBuckets()).MustCurryWith(commonLabels),
+		RequestsDurationPercentage: hub.NewSummaryVec(
+			"service_requests_duration_percentage",
+			"request processing duration summary of a backend",
+			httpserverLabels,
+			DefaultObjectives()).MustCurryWith(commonLabels),
+		RequestSizeBytesPercentage: hub.NewSummaryVec(
+			"service_requests_size_bytes_percentage",
+			"a summary of the total size of the request to a backend. Includes body",
+			httpserverLabels,
+			DefaultObjectives()).MustCurryWith(commonLabels),
+		ResponseSizeBytesPercentage: hub.NewSummaryVec(
+			"service_responses_size_bytes_percentage",
+			"a summary of the total size of the returned response body from a backend",
+			httpserverLabels,
+			DefaultObjectives()).MustCurryWith(commonLabels),
+		M1: hub.NewGaugeVec(
 			"service_m1",
 			"QPS (exponentially-weighted moving average) in last 1 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M5: hub.NewGauge(
+		M5: hub.NewGaugeVec(
 			"service_m5",
 			"QPS (exponentially-weighted moving average) in last 5 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M15: hub.NewGauge(
+		M15: hub.NewGaugeVec(
 			"service_m15",
 			"QPS (exponentially-weighted moving average) in last 15 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M1Err: hub.NewGauge(
+		M1Err: hub.NewGaugeVec(
 			"service_m1_err",
 			"QPS (exponentially-weighted moving average) in last 1 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M5Err: hub.NewGauge(
+		M5Err: hub.NewGaugeVec(
 			"service_m5_err",
 			"QPS (exponentially-weighted moving average) in last 5 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M15Err: hub.NewGauge(
+		M15Err: hub.NewGaugeVec(
 			"service_m15_err",
 			"QPS (exponentially-weighted moving average) in last 15 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M1ErrPercent: hub.NewGauge(
+		M1ErrPercent: hub.NewGaugeVec(
 			"service_m1_err_percent",
 			"error percentage in last 1 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M5ErrPercent: hub.NewGauge(
+		M5ErrPercent: hub.NewGaugeVec(
 			"service_m5_err_percent",
 			"error percentage in last 5 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		M15ErrPercent: hub.NewGauge(
+		M15ErrPercent: hub.NewGaugeVec(
 			"service_m15_err_percent",
 			"error percentage in last 15 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
-		Min: hub.NewGauge(
+		Min: hub.NewGaugeVec(
 			"service_min",
 			"The http-request minimal execution duration in milliseconds",
 			httpserverLabels).MustCurryWith(commonLabels),
-		Max: hub.NewGauge(
+		Max: hub.NewGaugeVec(
 			"service_max",
 			"The http-request maximal execution duration in milliseconds",
 			httpserverLabels).MustCurryWith(commonLabels),
-		Mean: hub.NewGauge(
+		Mean: hub.NewGaugeVec(
 			"service_mean",
 			"The http-request mean execution duration in milliseconds",
 			httpserverLabels).MustCurryWith(commonLabels),
-		P25: hub.NewGauge(
+		P25: hub.NewGaugeVec(
 			"service_p25",
 			"TP25: The processing time for 25% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
-		P50: hub.NewGauge(
+		P50: hub.NewGaugeVec(
 			"service_p50",
 			"TP50: The processing time for 50% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
-		P75: hub.NewGauge(
+		P75: hub.NewGaugeVec(
 			"service_p75",
 			"TP75: The processing time for 75% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
-		P95: hub.NewGauge(
+		P95: hub.NewGaugeVec(
 			"service_p95",
 			"TP95: The processing time for 95% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
-		P98: hub.NewGauge(
+		P98: hub.NewGaugeVec(
 			"service_p98",
 			"TP98: The processing time for 98% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
-		P99: hub.NewGauge(
+		P99: hub.NewGaugeVec(
 			"service_p99",
 			"TP99: The processing time for 99% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
-		P999: hub.NewGauge(
+		P999: hub.NewGaugeVec(
 			"service_p999",
 			"TP999: The processing time for 99.9% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
-		ReqSize: hub.NewGauge(
+		ReqSize: hub.NewGaugeVec(
 			"service_req_size",
 			"The total size of the http requests in this statistic window",
 			httpserverLabels).MustCurryWith(commonLabels),
-		RespSize: hub.NewGauge(
+		RespSize: hub.NewGaugeVec(
 			"service_resp_size",
 			"The total size of the http responses in this statistic window",
 			httpserverLabels).MustCurryWith(commonLabels),

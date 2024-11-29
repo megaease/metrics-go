@@ -5,8 +5,6 @@ import (
 	"net/http"
 
 	"github.com/megaease/metrics-go/metricshub"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -17,24 +15,19 @@ func main() {
 	// Initialize MetricsHub
 	mHub := metricshub.NewMetricsHub(config)
 
-	// Create and register metrics
-	gauge := prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "example_gauge",
-		Help: "An example gauge metric",
-		ConstLabels: prometheus.Labels{
-			"label_1": "value_1",
-		},
-	})
-	counter := prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "example_counter",
-		Help: "An example counter metric",
-		ConstLabels: prometheus.Labels{
-			"label_2": "value_2",
-		},
+	mHub.RegisterMetric(&metricshub.MetricRegistration{
+		Name:      "example_gauge",
+		Help:      "An example gauge metric",
+		Type:      metricshub.MetricTypeGaugeVec,
+		LabelKeys: []string{"label_1"},
 	})
 
-	mHub.RegisterMetric("example_gauge", gauge)
-	mHub.RegisterMetric("example_counter", counter)
+	mHub.RegisterMetric(&metricshub.MetricRegistration{
+		Name:      "example_counter",
+		Help:      "An example counter metric",
+		Type:      metricshub.MetricTypeCounterVec,
+		LabelKeys: []string{"label_2"},
+	})
 
 	// Update metrics dynamically
 	mHub.UpdateMetrics("example_gauge", 42.5, nil)

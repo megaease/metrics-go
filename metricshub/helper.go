@@ -21,12 +21,12 @@ var (
 	validLabel  = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 )
 
-// NewCounter creates a counter metric
-func (hub *MetricsHub) NewCounter(metric string, help string, labels []string) *prometheus.CounterVec {
+// NewCounterVec creates a counter metric vec.
+func (hub *MetricsHub) NewCounterVec(name string, help string, labels []string) *prometheus.CounterVec {
 	lock.Lock()
 	defer lock.Unlock()
 
-	metricName, err := getAndValidate(metric, labels)
+	metricName, err := getAndValidate(name, labels)
 	if err != nil {
 		return nil
 	}
@@ -47,12 +47,12 @@ func (hub *MetricsHub) NewCounter(metric string, help string, labels []string) *
 	return counterMap[metricName]
 }
 
-// NewGauge creates a gauge metric
-func (hub *MetricsHub) NewGauge(metric string, help string, labels []string) *prometheus.GaugeVec {
+// NewGaugeVec creates a gauge metric vec.
+func (hub *MetricsHub) NewGaugeVec(name string, help string, labels []string) *prometheus.GaugeVec {
 	lock.Lock()
 	defer lock.Unlock()
 
-	metricName, err := getAndValidate(metric, labels)
+	metricName, err := getAndValidate(name, labels)
 	if err != nil {
 		return nil
 	}
@@ -72,12 +72,13 @@ func (hub *MetricsHub) NewGauge(metric string, help string, labels []string) *pr
 	return gaugeMap[metricName]
 }
 
-// NewHistogram creates a Histogram metric
-func (hub *MetricsHub) NewHistogram(opt prometheus.HistogramOpts, labels []string) *prometheus.HistogramVec {
+// NewHistogramVec creates a Histogram metric vec.
+// Export more opts if needed in future.
+func (hub *MetricsHub) NewHistogramVec(name, help string, labels []string, buckets []float64) *prometheus.HistogramVec {
 	lock.Lock()
 	defer lock.Unlock()
 
-	metricName, err := getAndValidate(opt.Name, labels)
+	metricName, err := getAndValidate(name, labels)
 	if err != nil {
 		return nil
 	}
@@ -86,7 +87,11 @@ func (hub *MetricsHub) NewHistogram(opt prometheus.HistogramOpts, labels []strin
 		return m
 	}
 	histogramMap[metricName] = prometheus.NewHistogramVec(
-		opt,
+		prometheus.HistogramOpts{
+			Name:    metricName,
+			Help:    help,
+			Buckets: buckets,
+		},
 		labels,
 	)
 	hub.registry.MustRegister(histogramMap[metricName])
@@ -94,12 +99,13 @@ func (hub *MetricsHub) NewHistogram(opt prometheus.HistogramOpts, labels []strin
 	return histogramMap[metricName]
 }
 
-// NewSummary creates a NewSummary metric
-func (hub *MetricsHub) NewSummary(opt prometheus.SummaryOpts, labels []string) *prometheus.SummaryVec {
+// NewSummaryVec creates a Summary metric vec.
+// Export more opts if needed in future.
+func (hub *MetricsHub) NewSummaryVec(name, help string, labels []string, objectives map[float64]float64) *prometheus.SummaryVec {
 	lock.Lock()
 	defer lock.Unlock()
 
-	metricName, err := getAndValidate(opt.Name, labels)
+	metricName, err := getAndValidate(name, labels)
 	if err != nil {
 		return nil
 	}
@@ -108,7 +114,11 @@ func (hub *MetricsHub) NewSummary(opt prometheus.SummaryOpts, labels []string) *
 		return m
 	}
 	summaryMap[metricName] = prometheus.NewSummaryVec(
-		opt,
+		prometheus.SummaryOpts{
+			Name:       metricName,
+			Help:       help,
+			Objectives: objectives,
+		},
 		labels,
 	)
 	hub.registry.MustRegister(summaryMap[metricName])
@@ -116,9 +126,9 @@ func (hub *MetricsHub) NewSummary(opt prometheus.SummaryOpts, labels []string) *
 	return summaryMap[metricName]
 }
 
-func getAndValidate(metricName string, labels []string) (string, error) {
-	if !ValidateMetricName(metricName) {
-		return "", fmt.Errorf("invalid metric name: %s", metricName)
+func getAndValidate(name string, labels []string) (string, error) {
+	if !ValidateMetricName(name) {
+		return "", fmt.Errorf("invalid metric name: %s", name)
 	}
 
 	for _, l := range labels {
@@ -126,7 +136,7 @@ func getAndValidate(metricName string, labels []string) (string, error) {
 			return "", fmt.Errorf("invalid label name: %s", l)
 		}
 	}
-	return metricName, nil
+	return name, nil
 }
 
 // ValidateMetricName checks if the metric name is valid
