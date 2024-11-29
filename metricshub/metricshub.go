@@ -87,12 +87,6 @@ type (
 		// Only used for SummaryVec.
 		SummaryObjectives map[float64]float64
 
-		// AutoMerge is the flag to enable auto-merging for the metric.
-		// If enabled, the metric will be merged based on AutoMergedLabelKeys.
-		// We only add the merged metric without removing the original metric.
-		AutoMerge          bool
-		AutoMergeLabelKeys []string
-
 		collector prometheus.Collector
 	}
 
@@ -202,13 +196,6 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[stri
 		return fmt.Errorf("BUG: unsupported metric type: %T", m)
 	}
 
-	if metricReg.AutoMerge {
-		err := hub.mergeMetrics(metricReg)
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -277,11 +264,20 @@ func (hub *MetricsHub) NotifySlack(msg string) error {
 	return nil
 }
 
-func (hub *MetricsHub) groupMetrics(reg *MetricRegistration) ([]mergeMetric, error) {
+func (hub *MetricsHub) CollectMetrics(name string, mergedLabels []string) error {
+	reg, exists := hub.metricsRegistrations[name]
+	if !exists {
+		return errors.New("metric not found")
+	}
+	err := hub.mergeMetrics(reg, mergedLabels)
+	return err
+}
+
+func (hub *MetricsHub) groupMetrics(reg *MetricRegistration, mergedLabels []string) ([]mergeMetric, error) {
 	compositeLabelKeys := make([]string, 0)
 	for _, labelKey := range reg.LabelKeys {
 		isMergeKey := false
-		for _, mergeLabelKey := range reg.AutoMergeLabelKeys {
+		for _, mergeLabelKey := range mergedLabels {
 			if labelKey == mergeLabelKey {
 				isMergeKey = true
 				break
@@ -344,7 +340,7 @@ func (hub *MetricsHub) groupMetrics(reg *MetricRegistration) ([]mergeMetric, err
 
 	var mergedMetrics []mergeMetric
 	for key, groupLabels := range groupedLabels {
-		for _, mergeLabel := range reg.AutoMergeLabelKeys {
+		for _, mergeLabel := range mergedLabels {
 			groupLabels[mergeLabel] = MergedLabelValue
 		}
 		value := groupedValues[key]
@@ -356,10 +352,10 @@ func (hub *MetricsHub) groupMetrics(reg *MetricRegistration) ([]mergeMetric, err
 	return mergedMetrics, nil
 }
 
-func (hub *MetricsHub) mergeMetrics(reg *MetricRegistration) error {
+func (hub *MetricsHub) mergeMetrics(reg *MetricRegistration, mergedLabels []string) error {
 	switch m := reg.collector.(type) {
 	case *prometheus.GaugeVec:
-		mergedMetrics, err := hub.groupMetrics(reg)
+		mergedMetrics, err := hub.groupMetrics(reg, mergedLabels)
 		if err != nil {
 			return err
 		}
@@ -367,7 +363,7 @@ func (hub *MetricsHub) mergeMetrics(reg *MetricRegistration) error {
 			m.With(mergedMetric.Labels).Set(mergedMetric.value)
 		}
 	case *prometheus.CounterVec:
-		mergedMetrics, err := hub.groupMetrics(reg)
+		mergedMetrics, err := hub.groupMetrics(reg, mergedLabels)
 		if err != nil {
 			return err
 		}
@@ -375,7 +371,7 @@ func (hub *MetricsHub) mergeMetrics(reg *MetricRegistration) error {
 			m.With(mergedMetric.Labels).Add(mergedMetric.value)
 		}
 	case *prometheus.SummaryVec:
-		mergedMetrics, err := hub.groupMetrics(reg)
+		mergedMetrics, err := hub.groupMetrics(reg, mergedLabels)
 		if err != nil {
 			return err
 		}
@@ -383,7 +379,7 @@ func (hub *MetricsHub) mergeMetrics(reg *MetricRegistration) error {
 			m.With(mergedMetric.Labels).Observe(mergedMetric.value)
 		}
 	case *prometheus.HistogramVec:
-		mergedMetrics, err := hub.groupMetrics(reg)
+		mergedMetrics, err := hub.groupMetrics(reg, mergedLabels)
 		if err != nil {
 			return err
 		}

@@ -40,14 +40,13 @@ func TestMergedMetrics1(t *testing.T) {
 		Labels:      nil,
 	})
 
-	metricsHub.RegisterMetric(&MetricRegistration{
-		Name:               "example_gauge",
-		Help:               "An example gauge vector",
-		Type:               MetricTypeGaugeVec,
-		LabelKeys:          []string{"cluster", "node", "spec"},
-		AutoMerge:          true,
-		AutoMergeLabelKeys: []string{"node"},
-	})
+	reg := &MetricRegistration{
+		Name:      "example_gauge",
+		Help:      "An example gauge vector",
+		Type:      MetricTypeGaugeVec,
+		LabelKeys: []string{"cluster", "node", "spec"},
+	}
+	metricsHub.RegisterMetric(reg)
 
 	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
 		"cluster": "1001",
@@ -69,6 +68,8 @@ func TestMergedMetrics1(t *testing.T) {
 		"node":    "ds04",
 		"spec":    "4060",
 	})
+	err := metricsHub.CollectMetrics("example_gauge", []string{"node"})
+	assert.NoError(t, err)
 
 	collector := metricsHub.GetCollector("example_gauge")
 
@@ -98,12 +99,10 @@ func TestMergedMetrics2(t *testing.T) {
 	})
 
 	metricsHub.RegisterMetric(&MetricRegistration{
-		Name:               "example_gauge",
-		Help:               "An example gauge vector",
-		Type:               MetricTypeGaugeVec,
-		LabelKeys:          []string{"cluster", "node", "spec"},
-		AutoMerge:          true,
-		AutoMergeLabelKeys: []string{"node", "cluster"},
+		Name:      "example_gauge",
+		Help:      "An example gauge vector",
+		Type:      MetricTypeGaugeVec,
+		LabelKeys: []string{"cluster", "node", "spec"},
 	})
 
 	metricsHub.UpdateMetrics("example_gauge", 8.0, map[string]string{
@@ -127,6 +126,8 @@ func TestMergedMetrics2(t *testing.T) {
 		"spec":    "4060",
 	})
 
+	err := metricsHub.CollectMetrics("example_gauge", []string{"node", "cluster"})
+	assert.NoError(t, err)
 	collector := metricsHub.GetCollector("example_gauge")
 
 	printGaugeVec(collector.(*prometheus.GaugeVec))
