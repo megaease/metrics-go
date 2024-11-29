@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	dto "github.com/prometheus/client_model/go"
 	"io"
 	"net/http"
 	"strings"
 	"time"
+
+	dto "github.com/prometheus/client_model/go"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -23,6 +24,9 @@ const (
 	// defaultSlackWebhookURL is the default webhook URL for Slack notifications.
 	// It will send the notifications to the #online-alert channel.
 	defaultSlackWebhookURL = "https://hooks.slack.com/services/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"
+
+	// MergedLabelValue is the placeholder value for merged metrics.
+	MergedLabelValue = "MERGED_LABEL"
 )
 
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
@@ -256,11 +260,11 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 			return nil, err
 		}
 
-		compositeKeyParts := make([]string, len(labels))
+		compositeKeyParts := make([]string, 0, len(labels))
 		metricLabels := m.GetLabel()
 		mergedMetric := false
 		for i := range metricLabels {
-			if metricLabels[i].GetValue() == "merged" {
+			if metricLabels[i].GetValue() == MergedLabelValue {
 				mergedMetric = true
 			}
 		}
@@ -278,12 +282,11 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 				}
 			}
 		}
-		compositeKey := strings.Join(compositeKeyParts, "，")
+		compositeKey := strings.Join(compositeKeyParts, ",")
 
 		value := hub.getMetricValue(m, metricType)
 		if _, exists := groupedValues[compositeKey]; !exists {
 			groupedValues[compositeKey] = value
-			groupedLabels[compositeKey] = make(map[string]string)
 			groupedLabels[compositeKey] = newLabels
 		} else {
 			groupedValues[compositeKey] += value
@@ -293,7 +296,7 @@ func (hub *MetricsHub) groupMetrics(metric prometheus.Collector, labels, mergedL
 	var mergedMetrics []mergeMetric
 	for key, groupLabels := range groupedLabels {
 		for _, label := range mergedLabels {
-			groupLabels[label] = "merged"
+			groupLabels[label] = MergedLabelValue
 		}
 		value := groupedValues[key]
 		mergedMetrics = append(mergedMetrics, mergeMetric{
