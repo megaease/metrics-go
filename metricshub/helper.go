@@ -161,5 +161,12 @@ func DefaultBodySizeBuckets() []float64 {
 
 // DefaultObjectives returns default summary objectives
 func DefaultObjectives() map[float64]float64 {
-	return map[float64]float64{0.25: 10, 0.5: 10, 0.75: 10, 0.9: 10, 0.95: 10, 0.99: 10}
+	return map[float64]float64{
+		0.25: 0.1,
+		0.5:  0.05,
+		0.75: 0.01,
+		0.9:  0.005,
+		0.95: 0.001,
+		0.99: 0.0001,
+	}
 }
