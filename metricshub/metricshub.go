@@ -37,7 +37,8 @@ const (
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
 type (
 	MetricsHubConfig conf.Config
-	MetricsHub       struct {
+
+	MetricsHub struct {
 		config               *MetricsHubConfig
 		registry             *prometheus.Registry
 		metricsRegistrations map[string]*MetricRegistration
