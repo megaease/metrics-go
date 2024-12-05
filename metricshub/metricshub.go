@@ -1,14 +1,14 @@
 package metricshub
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/megaease/metrics-go/conf"
+	"github.com/megaease/metrics-go/notify"
 	dto "github.com/prometheus/client_model/go"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -36,28 +36,8 @@ const (
 
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
 type (
-	MetricsHubConfig struct {
-		// ServiceName is the name of the service. It is required.
-		// The service name will be used as a label in the http metrics.
-		// Other custom metrics will not add this label, should be added manually.
-		ServiceName string `yaml:"serviceName" json:"serviceName"`
-		// HostName is the hostname of the service. It is required.
-		// The hostname will be used as a label in the http metrics.
-		// Other custom metrics will not add this label, should be added manually.
-		HostName string `yaml:"hostName" json:"hostName"`
-		// Labels is the additional labels for the service.
-		// This labels will be added to the http metrics.
-		// Other custom metrics will not add this label, should be added manually.
-		// +optional
-		Labels map[string]string `yaml:"labels" json:"labels"`
-		// SlackWebhookURL is the webhook URL for Slack notifications.
-		// If not set, the default value will be used when sending notifications.
-		// So be sure to set this value if you want to receive notifications.
-		// +optional
-		SlackWebhookURL string `yaml:"slackWebhookURL" json:"slackWebhookURL"`
-	}
-
-	MetricsHub struct {
+	MetricsHubConfig conf.Config
+	MetricsHub       struct {
 		config               *MetricsHubConfig
 		registry             *prometheus.Registry
 		metricsRegistrations map[string]*MetricRegistration
@@ -230,38 +210,16 @@ func (hub *MetricsHub) UpdateHTTPRequestMetrics(requestMetric *RequestMetric, me
 	hub.httpMetrics.exportPrometheusMetricsForRequestMetric(requestMetric, method, path)
 }
 
-// NotifySlack sends a message to the Slack webhook.
-// If the webhook URL is not set, the default value will be used.
+// NotifyMessage sends a message to backend, for now, we only support Slack.
 // So be sure to set the webhook URL if you want to receive notifications.
-func (hub *MetricsHub) NotifySlack(msg string) error {
-	if hub.config.SlackWebhookURL == "" {
-		hub.config.SlackWebhookURL = defaultSlackWebhookURL
-	}
+func (hub *MetricsHub) NotifyMessage(msg string) error {
+	return notify.NotifyMessage(hub.config.ToConfig(), msg)
+}
 
-	req, err := http.NewRequest(http.MethodPost, hub.config.SlackWebhookURL, bytes.NewBuffer([]byte(msg)))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-	req.Close = true
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	buf, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("error response from Slack - code [%d] - msg [%s]", resp.StatusCode, string(buf))
-	}
-	return nil
+// NotifyResult sends a result to backend, for now, we only support Slack.
+// Use this to form the notification message nicely.
+func (hub *MetricsHub) NotifyResult(result *notify.Result) error {
+	return notify.NotifyResult(hub.config.ToConfig(), result)
 }
 
 func (hub *MetricsHub) CollectMergedMetrics(name string, mergedLabels []string) error {
@@ -406,4 +364,8 @@ func (hub *MetricsHub) getMetricValue(m *dto.Metric, metricType MetricType) floa
 	default:
 		return 0
 	}
+}
+
+func (cfg *MetricsHubConfig) ToConfig() *conf.Config {
+	return (*conf.Config)(cfg)
 }
