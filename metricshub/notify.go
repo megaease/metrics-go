@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	DefaultIconURL    = "https://megaease.com/favicon.png"
-	DefaultTimeFormat = "2006-01-02 15:04:05 Z0700"
+	DefaultIconURL = "https://megaease.com/favicon.png"
 )
 
 // ResultStatus is the status of result
@@ -126,7 +125,7 @@ func toSlack(cfg *MetricsHubConfig, r *Result) string {
 
 	body := fmt.Sprintf("*%s*\\n>%s %s\\n>%s",
 		r.Title, r.Status.Emoji(), r.Endpoint, jsonEscape(r.Message))
-	context := slackTimeFormation(r.TimeStamp, " report at ", DefaultTimeFormat)
+	context := slackTimeFormation(r.TimeStamp, " report at ", time.RFC3339)
 	summary := fmt.Sprintf("%s %s - %s", r.Title, r.Status.Emoji(), jsonEscape(r.Message))
 	output := fmt.Sprintf(jsonMsg, summary, body, context)
 	if !json.Valid([]byte(output)) {
