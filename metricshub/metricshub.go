@@ -1,10 +1,8 @@
 package metricshub
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -20,10 +18,6 @@ const (
 	// It is set to 5 seconds to match the default interval used by go-metrics.
 	// https://github.com/rcrowley/go-metrics/blob/3113b8401b8a98917cde58f8bbd42a1b1c03b1fd/ewma.go#L98-L99
 	httpStatusUpdateInterval = 5 * time.Second
-
-	// defaultSlackWebhookURL is the default webhook URL for Slack notifications.
-	// It will send the notifications to the #online-alert channel.
-	defaultSlackWebhookURL = "https://hooks.slack.com/services/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"
 
 	// MergedLabelValue is the placeholder value for merged metrics.
 	MergedLabelValue = "MERGED_LABEL"
@@ -230,38 +224,16 @@ func (hub *MetricsHub) UpdateHTTPRequestMetrics(requestMetric *RequestMetric, me
 	hub.httpMetrics.exportPrometheusMetricsForRequestMetric(requestMetric, method, path)
 }
 
-// NotifySlack sends a message to the Slack webhook.
-// If the webhook URL is not set, the default value will be used.
+// NotifyMessage sends a message to backend, for now, we only support Slack.
 // So be sure to set the webhook URL if you want to receive notifications.
-func (hub *MetricsHub) NotifySlack(msg string) error {
-	if hub.config.SlackWebhookURL == "" {
-		hub.config.SlackWebhookURL = defaultSlackWebhookURL
-	}
+func (hub *MetricsHub) NotifyMessage(msg string) error {
+	return notifyMessage(hub.config, msg)
+}
 
-	req, err := http.NewRequest(http.MethodPost, hub.config.SlackWebhookURL, bytes.NewBuffer([]byte(msg)))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Add("Content-Type", "application/json")
-	req.Close = true
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	buf, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("error response from Slack - code [%d] - msg [%s]", resp.StatusCode, string(buf))
-	}
-	return nil
+// NotifyResult sends a result to backend, for now, we only support Slack.
+// Use this to form the notification message nicely.
+func (hub *MetricsHub) NotifyResult(result *Result) error {
+	return notifyResult(hub.config, result)
 }
 
 func (hub *MetricsHub) CollectMergedMetrics(name string, mergedLabels []string) error {
