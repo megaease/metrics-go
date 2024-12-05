@@ -1,4 +1,4 @@
-package notify
+package metricshub
 
 import (
 	"bytes"
@@ -8,9 +8,38 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/megaease/metrics-go/conf"
 )
+
+const (
+	DefaultIconURL    = "https://megaease.com/favicon.png"
+	DefaultTimeFormat = "2006-01-02 15:04:05 Z0700"
+)
+
+// ResultStatus is the status of result
+type ResultStatus int
+
+// The status of a result
+const (
+	ResultStatusUnknown ResultStatus = iota
+	ResultStatusSuccess
+	ResultStatusFailure
+)
+
+var (
+	toEmoji = map[ResultStatus]string{
+		ResultStatusUnknown: "⛔️",
+		ResultStatusSuccess: "✅",
+		ResultStatusFailure: "❌",
+	}
+)
+
+// Emoji convert the status to emoji
+func (s *ResultStatus) Emoji() string {
+	if val, ok := toEmoji[*s]; ok {
+		return val
+	}
+	return "⛔️"
+}
 
 // Result is used to form the notification message
 type Result struct {
@@ -19,7 +48,7 @@ type Result struct {
 	// Title is the title of the result
 	Title string
 	// Status is the status of the result
-	Status Status
+	Status ResultStatus
 	// Endpoint is the endpoint of the result, usually is the URL or command
 	Endpoint string
 	// Message is the message of the result
@@ -28,7 +57,7 @@ type Result struct {
 	TimeStamp time.Time
 }
 
-func NotifyMessage(cfg *conf.Config, msg string) error {
+func notifyMessage(cfg *MetricsHubConfig, msg string) error {
 	if cfg.SlackWebhookURL == "" {
 		return fmt.Errorf("Slack webhook is empty")
 	}
@@ -59,11 +88,12 @@ func NotifyMessage(cfg *conf.Config, msg string) error {
 	return nil
 }
 
-func NotifyResult(cfg *conf.Config, result *Result) error {
-	return nil
+func notifyResult(cfg *MetricsHubConfig, result *Result) error {
+	msg := toSlack(cfg, result)
+	return notifyMessage(cfg, msg)
 }
 
-func toSlack(cfg *conf.Config, r Result) string {
+func toSlack(cfg *MetricsHubConfig, r *Result) string {
 	serviceName := getServiceHostName(cfg)
 	jsonMsg := `
 	{
@@ -105,7 +135,7 @@ func toSlack(cfg *conf.Config, r Result) string {
 	return output
 }
 
-func getServiceHostName(cfg *conf.Config) string {
+func getServiceHostName(cfg *MetricsHubConfig) string {
 	return fmt.Sprintf("%s@%s", cfg.ServiceName, cfg.HostName)
 }
 
