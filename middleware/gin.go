@@ -21,7 +21,13 @@ func NewGinMetricsCollector(hub *metricshub.MetricsHub) gin.HandlerFunc {
 		method := c.Request.Method
 		statusCode := c.Writer.Status()
 		bodyBytesReceived := c.Request.ContentLength
+		if bodyBytesReceived < 0 {
+			bodyBytesReceived = 0
+		}
 		bodyBytesSent := int64(c.Writer.Size())
+		if bodyBytesSent < 0 {
+			bodyBytesSent = 0
+		}
 
 		// Prepare the metric data
 		requestMetric := &metricshub.RequestMetric{
