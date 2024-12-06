@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -135,7 +136,13 @@ func toSlack(cfg *MetricsHubConfig, r *Result) string {
 }
 
 func getServiceHostName(cfg *MetricsHubConfig) string {
-	return fmt.Sprintf("%s@%s", cfg.ServiceName, cfg.HostName)
+	var hostname string
+	if cfg.HostName == "" {
+		hostname, _ = os.Hostname()
+	} else {
+		hostname = cfg.HostName
+	}
+	return fmt.Sprintf("%s@%s", cfg.ServiceName, hostname)
 }
 
 func jsonEscape(str string) string {

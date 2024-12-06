@@ -2,6 +2,7 @@ package metricshub
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"os"
 )
 
 type (
@@ -44,10 +45,16 @@ type (
 // newHTTPMetrics create the HttpServerMetrics.
 func (hub *MetricsHub) newHTTPMetrics() *httpRequestMetrics {
 	commonLabels := prometheus.Labels{
-		"serviceName": hub.config.ServiceName,
-		"hostName":    hub.config.HostName,
+		"service_name": hub.config.ServiceName,
 	}
-	httpserverLabels := []string{"serviceName", "hostName", "method", "path"}
+	if hub.config.EnableHostNameLabel {
+		if hub.config.HostName == "" {
+			hostname, _ := os.Hostname()
+			hub.config.HostName = hostname
+		}
+		commonLabels["host_name"] = hub.config.HostName
+	}
+	httpserverLabels := []string{"service_name", "host_name", "method", "path"}
 	if hub.config.Labels != nil {
 		for k, v := range hub.config.Labels {
 			commonLabels[k] = v

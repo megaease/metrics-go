@@ -35,9 +35,10 @@ type (
 		// The service name will be used as a label in the http metrics.
 		// Other custom metrics will not add this label, should be added manually.
 		ServiceName string `yaml:"serviceName" json:"serviceName"`
-		// HostName is the hostname of the service. It is required.
+		// HostName is the hostname of the service.
 		// The hostname will be used as a label in the http metrics.
 		// Other custom metrics will not add this label, should be added manually.
+		// +optional
 		HostName string `yaml:"hostName" json:"hostName"`
 		// Labels is the additional labels for the service.
 		// This labels will be added to the http metrics.
@@ -49,6 +50,12 @@ type (
 		// So be sure to set this value if you want to receive notifications.
 		// +optional
 		SlackWebhookURL string `yaml:"slackWebhookURL" json:"slackWebhookURL"`
+		// EnableHostNameLabel is the flag to enable the hostname label in the http metrics.
+		// Default is true.
+		// If set to false, the hostname label will not be added to the http metrics.
+		// If set to true, but the hostname is not set, the host_name label will be set to os.Hostname().
+		// +optional
+		EnableHostNameLabel bool `yaml:"enableHostNameLabel" json:"enableHostNameLabel"`
 	}
 
 	MetricsHub struct {
