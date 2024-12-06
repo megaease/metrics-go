@@ -51,7 +51,7 @@ type (
 		// +optional
 		SlackWebhookURL string `yaml:"slackWebhookURL" json:"slackWebhookURL"`
 		// EnableHostNameLabel is the flag to enable the hostname label in the http metrics.
-		// Default is true.
+		// Default is false.
 		// If set to false, the hostname label will not be added to the http metrics.
 		// If set to true, but the hostname is not set, the host_name label will be set to os.Hostname().
 		// +optional
