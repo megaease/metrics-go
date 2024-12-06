@@ -22,7 +22,13 @@ func NewEchoMetricsCollector(hub *metricshub.MetricsHub) echo.MiddlewareFunc {
 			method := ctx.Request().Method
 			code := ctx.Response().Status
 			bodyBytesReceived := ctx.Request().ContentLength
+			if bodyBytesReceived < 0 {
+				bodyBytesReceived = 0
+			}
 			bodyBytesSent := ctx.Response().Size
+			if bodyBytesSent < 0 {
+				bodyBytesSent = 0
+			}
 
 			// We just use the registered router path as the group path.
 			groupPath := path
