@@ -47,14 +47,15 @@ func (hub *MetricsHub) newHTTPMetrics() *httpRequestMetrics {
 	commonLabels := prometheus.Labels{
 		"service_name": hub.config.ServiceName,
 	}
+	httpserverLabels := []string{"service_name", "method", "path"}
 	if hub.config.EnableHostNameLabel {
+		httpserverLabels = append(httpserverLabels, "host_name")
 		if hub.config.HostName == "" {
 			hostname, _ := os.Hostname()
 			hub.config.HostName = hostname
 		}
 		commonLabels["host_name"] = hub.config.HostName
 	}
-	httpserverLabels := []string{"service_name", "host_name", "method", "path"}
 	if hub.config.Labels != nil {
 		for k, v := range hub.config.Labels {
 			commonLabels[k] = v
