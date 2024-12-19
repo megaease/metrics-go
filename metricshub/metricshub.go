@@ -200,6 +200,44 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[stri
 	return nil
 }
 
+// IncMetrics increments a metric by 1.
+// It only works for GaugeVec and CounterVec, other types will return an error.
+func (hub *MetricsHub) IncMetrics(name string, labels map[string]string) error {
+	metricReg, exists := hub.metricsRegistrations[name]
+	if !exists {
+		return nil // RequestMetric not found
+	}
+
+	switch m := metricReg.collector.(type) {
+	case *prometheus.GaugeVec:
+		m.With(labels).Inc()
+	case *prometheus.CounterVec:
+		m.With(labels).Inc()
+	default:
+		return fmt.Errorf("BUG: unsupported metric type for inc: %T", m)
+	}
+
+	return nil
+}
+
+// DecMetrics decrements a metric by 1.
+// It only works for GaugeVec, other types will return an error.
+func (hub *MetricsHub) DecMetrics(name string, labels map[string]string) error {
+	metricReg, exists := hub.metricsRegistrations[name]
+	if !exists {
+		return nil // RequestMetric not found
+	}
+
+	switch m := metricReg.collector.(type) {
+	case *prometheus.GaugeVec:
+		m.With(labels).Dec()
+	default:
+		return fmt.Errorf("BUG: unsupported metric type for dec: %T", m)
+	}
+
+	return nil
+}
+
 // UpdateHTTPRequestMetrics updates the HTTP request metrics.
 // Do not call this method directly, use the middleware instead.
 // Or only when you need to call the third-party API, and statistics are needed.
