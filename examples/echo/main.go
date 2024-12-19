@@ -21,9 +21,30 @@ func main() {
 		Labels: map[string]string{
 			"env": "dev",
 		},
+		EnableHostNameLabel: true,
 	}
 	// Initialize MetricsHub
 	mHub := metricshub.NewMetricsHub(config)
+	err := mHub.RegisterMetric(&metricshub.MetricRegistration{
+		Name:      "total_stocks",
+		Help:      "total stocks",
+		Type:      metricshub.MetricTypeGaugeVec,
+		LabelKeys: []string{"cluster_id", "dataCenter_id", "spec_name", "node_name"},
+	})
+	if err != nil {
+		log.Fatalf("register total_stocks metric failed: %v", err)
+	}
+
+	err = mHub.IncMetrics("total_stocks", map[string]string{
+		"cluster_id":    "cluster-01",
+		"dataCenter_id": "dc-01",
+		"spec_name":     "spec-01",
+		"node_name":     "node-01",
+	})
+	if err != nil {
+		log.Fatalf("inc total_stocks metric failed: %v", err)
+	}
+
 	app.Use(middleware.NewEchoMetricsCollector(mHub))
 
 	app.GET("/metrics", echo.WrapHandler(mHub.HTTPHandler()))
@@ -37,7 +58,7 @@ func main() {
 	})
 
 	log.Printf("Serving metrics at :8080/metrics")
-	err := app.Start(fmt.Sprintf(":%d", 8080))
+	err = app.Start(fmt.Sprintf(":%d", 8080))
 	if err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}

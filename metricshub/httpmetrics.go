@@ -6,6 +6,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	httpMetricsType = "http-request"
+)
+
 type (
 	// httpRequestMetrics is the statistics tool for HTTP traffic.
 	httpRequestMetrics struct {
@@ -47,8 +51,9 @@ type (
 func (hub *MetricsHub) newHTTPMetrics() *httpRequestMetrics {
 	commonLabels := prometheus.Labels{
 		"service_name": hub.config.ServiceName,
+		"type":         httpMetricsType,
 	}
-	httpserverLabels := []string{"service_name", "method", "path"}
+	httpserverLabels := []string{"service_name", "method", "path", "type"}
 	if hub.config.EnableHostNameLabel {
 		httpserverLabels = append(httpserverLabels, "host_name")
 		if hub.config.HostName == "" {

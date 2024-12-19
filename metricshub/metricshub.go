@@ -3,7 +3,10 @@ package metricshub
 import (
 	"errors"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"net/http"
+	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -26,6 +29,9 @@ const (
 	MetricTypeCounterVec   MetricType = "CounterVec"
 	MetricTypeSummaryVec   MetricType = "SummaryVec"
 	MetricTypeHistogramVec MetricType = "HistogramVec"
+
+	golangType  = "golang"
+	defaultType = "gpu-runtime"
 )
 
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
@@ -56,6 +62,10 @@ type (
 		// If set to true, but the hostname is not set, the host_name label will be set to os.Hostname().
 		// +optional
 		EnableHostNameLabel bool `yaml:"enableHostNameLabel" json:"enableHostNameLabel"`
+
+		// DisableFixedLabels is the flag to disable fixed labels in the http metrics.
+		// Default is false.
+		DisableFixedLabels bool `yaml:"disableFixedLabels" json:"disableFixedLabels"`
 	}
 
 	MetricsHub struct {
@@ -64,6 +74,7 @@ type (
 		metricsRegistrations map[string]*MetricRegistration
 		httpMetrics          *httpRequestMetrics
 		httpStats            map[httpStatsKey]*HTTPStat
+		fixedLabels          prometheus.Labels
 	}
 
 	httpStatsKey struct {
@@ -99,18 +110,60 @@ type (
 
 // NewMetricsHub initializes a new MetricsHub instance.
 func NewMetricsHub(config *MetricsHubConfig) *MetricsHub {
+	reg := prometheus.NewRegistry()
+	prometheus.WrapRegistererWith(prometheus.Labels{
+		"service_name": config.ServiceName,
+		"type":         golangType,
+	}, reg).MustRegister(
+		collectors.NewGoCollector(),
+		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+	)
+
 	hub := &MetricsHub{
 		config:               config,
-		registry:             prometheus.DefaultRegisterer.(*prometheus.Registry),
+		registry:             reg,
 		metricsRegistrations: make(map[string]*MetricRegistration),
 		httpStats:            make(map[httpStatsKey]*HTTPStat),
 	}
 
+	if !hub.config.DisableFixedLabels {
+		hub.fixedLabels = hub.getFixedLabels()
+	}
 	hub.httpMetrics = hub.newHTTPMetrics()
 
 	go hub.run()
 
 	return hub
+}
+
+func (hub *MetricsHub) getFixedLabels() prometheus.Labels {
+	if hub.fixedLabels != nil {
+		return hub.fixedLabels
+	}
+
+	labels := prometheus.Labels{
+		"service_name": hub.config.ServiceName,
+		"type":         defaultType,
+	}
+
+	if hub.config.EnableHostNameLabel {
+		if hub.config.HostName == "" {
+			hostname, _ := os.Hostname()
+			labels["host_name"] = hostname
+		} else {
+			labels["host_name"] = hub.config.HostName
+		}
+	}
+
+	if hub.config.Labels != nil {
+		// override the default labels
+		for k, v := range hub.config.Labels {
+			labels[k] = v
+		}
+	}
+
+	hub.fixedLabels = labels
+	return labels
 }
 
 func (hub *MetricsHub) run() {
@@ -132,6 +185,13 @@ func (hub *MetricsHub) run() {
 func (hub *MetricsHub) RegisterMetric(reg *MetricRegistration) error {
 	if _, exists := hub.metricsRegistrations[reg.Name]; exists {
 		return fmt.Errorf("metric %s already exists", reg.Name)
+	}
+	if !hub.config.DisableFixedLabels {
+		for k := range hub.fixedLabels {
+			if !slices.Contains(reg.LabelKeys, k) {
+				reg.LabelKeys = append(reg.LabelKeys, k)
+			}
+		}
 	}
 	hub.metricsRegistrations[reg.Name] = reg
 
@@ -160,7 +220,7 @@ func (hub *MetricsHub) GetCollector(name string) prometheus.Collector {
 
 // HTTPHandler returns an HTTP handler for the metrics endpoint.
 func (hub *MetricsHub) HTTPHandler() http.Handler {
-	return promhttp.Handler()
+	return promhttp.HandlerFor(hub.registry, promhttp.HandlerOpts{})
 }
 
 // CurrentMetrics returns a snapshot of all custom metrics registered with the hub.
@@ -178,6 +238,13 @@ func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[stri
 	metricReg, exists := hub.metricsRegistrations[name]
 	if !exists {
 		return nil // RequestMetric not found
+	}
+	if !hub.config.DisableFixedLabels {
+		for k, v := range hub.fixedLabels {
+			if _, exists := labels[k]; !exists {
+				labels[k] = v
+			}
+		}
 	}
 
 	switch m := metricReg.collector.(type) {
@@ -207,6 +274,13 @@ func (hub *MetricsHub) IncMetrics(name string, labels map[string]string) error {
 	if !exists {
 		return nil // RequestMetric not found
 	}
+	if !hub.config.DisableFixedLabels {
+		for k, v := range hub.fixedLabels {
+			if _, exists := labels[k]; !exists {
+				labels[k] = v
+			}
+		}
+	}
 
 	switch m := metricReg.collector.(type) {
 	case *prometheus.GaugeVec:
@@ -226,6 +300,13 @@ func (hub *MetricsHub) DecMetrics(name string, labels map[string]string) error {
 	metricReg, exists := hub.metricsRegistrations[name]
 	if !exists {
 		return nil // RequestMetric not found
+	}
+	if !hub.config.DisableFixedLabels {
+		for k, v := range hub.fixedLabels {
+			if _, exists := labels[k]; !exists {
+				labels[k] = v
+			}
+		}
 	}
 
 	switch m := metricReg.collector.(type) {
