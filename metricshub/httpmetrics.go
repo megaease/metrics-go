@@ -1,8 +1,9 @@
 package metricshub
 
 import (
-	"github.com/prometheus/client_golang/prometheus"
 	"os"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type (
@@ -65,129 +66,129 @@ func (hub *MetricsHub) newHTTPMetrics() *httpRequestMetrics {
 
 	return &httpRequestMetrics{
 		TotalRequests: hub.NewCounterVec(
-			"service_total_requests",
+			"total_requests",
 			"the total count of http requests",
 			httpserverLabels).MustCurryWith(commonLabels),
 		TotalResponses: hub.NewCounterVec(
-			"service_total_responses",
+			"total_responses",
 			"the total count of http responses",
 			httpserverLabels).MustCurryWith(commonLabels),
 		TotalErrorRequests: hub.NewCounterVec(
-			"service_total_error_requests",
+			"total_error_requests",
 			"the total count of http error requests",
 			httpserverLabels).MustCurryWith(commonLabels),
 		RequestsDuration: hub.NewHistogramVec(
-			"service_requests_duration",
+			"requests_duration",
 			"request processing duration histogram of a backend",
 			httpserverLabels,
 			DefaultDurationBuckets()).MustCurryWith(commonLabels),
 		RequestSizeBytes: hub.NewHistogramVec(
-			"service_requests_size_bytes",
+			"requests_size_bytes",
 			"a histogram of the total size of the request to a backend. Includes body",
 			httpserverLabels,
 			DefaultBodySizeBuckets()).MustCurryWith(commonLabels),
 		ResponseSizeBytes: hub.NewHistogramVec(
-			"service_responses_size_bytes",
+			"responses_size_bytes",
 			"a histogram of the total size of the returned response body from a backend",
 			httpserverLabels,
 			DefaultBodySizeBuckets()).MustCurryWith(commonLabels),
 		RequestsDurationPercentage: hub.NewSummaryVec(
-			"service_requests_duration_percentage",
+			"requests_duration_percentage",
 			"request processing duration summary of a backend",
 			httpserverLabels,
 			DefaultObjectives()).MustCurryWith(commonLabels),
 		RequestSizeBytesPercentage: hub.NewSummaryVec(
-			"service_requests_size_bytes_percentage",
+			"requests_size_bytes_percentage",
 			"a summary of the total size of the request to a backend. Includes body",
 			httpserverLabels,
 			DefaultObjectives()).MustCurryWith(commonLabels),
 		ResponseSizeBytesPercentage: hub.NewSummaryVec(
-			"service_responses_size_bytes_percentage",
+			"responses_size_bytes_percentage",
 			"a summary of the total size of the returned response body from a backend",
 			httpserverLabels,
 			DefaultObjectives()).MustCurryWith(commonLabels),
 		M1: hub.NewGaugeVec(
-			"service_m1",
+			"m1",
 			"QPS (exponentially-weighted moving average) in last 1 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M5: hub.NewGaugeVec(
-			"service_m5",
+			"m5",
 			"QPS (exponentially-weighted moving average) in last 5 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M15: hub.NewGaugeVec(
-			"service_m15",
+			"m15",
 			"QPS (exponentially-weighted moving average) in last 15 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M1Err: hub.NewGaugeVec(
-			"service_m1_err",
+			"m1_err",
 			"QPS (exponentially-weighted moving average) in last 1 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M5Err: hub.NewGaugeVec(
-			"service_m5_err",
+			"m5_err",
 			"QPS (exponentially-weighted moving average) in last 5 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M15Err: hub.NewGaugeVec(
-			"service_m15_err",
+			"m15_err",
 			"QPS (exponentially-weighted moving average) in last 15 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M1ErrPercent: hub.NewGaugeVec(
-			"service_m1_err_percent",
+			"m1_err_percent",
 			"error percentage in last 1 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M5ErrPercent: hub.NewGaugeVec(
-			"service_m5_err_percent",
+			"m5_err_percent",
 			"error percentage in last 5 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		M15ErrPercent: hub.NewGaugeVec(
-			"service_m15_err_percent",
+			"m15_err_percent",
 			"error percentage in last 15 minute",
 			httpserverLabels).MustCurryWith(commonLabels),
 		Min: hub.NewGaugeVec(
-			"service_min",
+			"min",
 			"The http-request minimal execution duration in milliseconds",
 			httpserverLabels).MustCurryWith(commonLabels),
 		Max: hub.NewGaugeVec(
-			"service_max",
+			"max",
 			"The http-request maximal execution duration in milliseconds",
 			httpserverLabels).MustCurryWith(commonLabels),
 		Mean: hub.NewGaugeVec(
-			"service_mean",
+			"mean",
 			"The http-request mean execution duration in milliseconds",
 			httpserverLabels).MustCurryWith(commonLabels),
 		P25: hub.NewGaugeVec(
-			"service_p25",
+			"p25",
 			"TP25: The processing time for 25% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
 		P50: hub.NewGaugeVec(
-			"service_p50",
+			"p50",
 			"TP50: The processing time for 50% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
 		P75: hub.NewGaugeVec(
-			"service_p75",
+			"p75",
 			"TP75: The processing time for 75% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
 		P95: hub.NewGaugeVec(
-			"service_p95",
+			"p95",
 			"TP95: The processing time for 95% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
 		P98: hub.NewGaugeVec(
-			"service_p98",
+			"p98",
 			"TP98: The processing time for 98% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
 		P99: hub.NewGaugeVec(
-			"service_p99",
+			"p99",
 			"TP99: The processing time for 99% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
 		P999: hub.NewGaugeVec(
-			"service_p999",
+			"p999",
 			"TP999: The processing time for 99.9% of the requests, in milliseconds.",
 			httpserverLabels).MustCurryWith(commonLabels),
 		ReqSize: hub.NewGaugeVec(
-			"service_req_size",
+			"req_size",
 			"The total size of the http requests in this statistic window",
 			httpserverLabels).MustCurryWith(commonLabels),
 		RespSize: hub.NewGaugeVec(
-			"service_resp_size",
+			"resp_size",
 			"The total size of the http responses in this statistic window",
 			httpserverLabels).MustCurryWith(commonLabels),
 	}
