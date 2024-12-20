@@ -34,6 +34,10 @@ const (
 	defaultType = "gpu-runtime"
 )
 
+var (
+	defaultExcludedHttpPath = []string{"/metrics", "/actuator/health"}
+)
+
 // MetricsHub wraps Prometheus metrics for monitoring purposes.
 type (
 	MetricsHubConfig struct {
@@ -66,6 +70,15 @@ type (
 		// DisableFixedLabels is the flag to disable fixed labels in the http metrics.
 		// Default is false.
 		DisableFixedLabels bool `yaml:"disableFixedLabels" json:"disableFixedLabels"`
+
+		// DisableDefaultExcludedHttpPath is the flag to disable default excluded http paths.
+		// Default is false.
+		DisableDefaultExcludedHttpPath bool `yaml:"disableDefaultExcludedHttpPath" json:"disableDefaultExcludedHttpPath"`
+
+		// ExcludedHttpPath is the list of excluded http paths.
+		// Default is ["/metrics", "/actuator/health"].
+		// +optional
+		ExcludedHttpPath []string `yaml:"excludedHttpPath" json:"excludedHttpPath"`
 	}
 
 	MetricsHub struct {
@@ -129,11 +142,24 @@ func NewMetricsHub(config *MetricsHubConfig) *MetricsHub {
 	if !hub.config.DisableFixedLabels {
 		hub.fixedLabels = hub.getFixedLabels()
 	}
+	if hub.config.ExcludedHttpPath == nil {
+		hub.config.ExcludedHttpPath = make([]string, 0)
+	}
+	if !hub.config.DisableDefaultExcludedHttpPath {
+		hub.config.ExcludedHttpPath = append(hub.config.ExcludedHttpPath, defaultExcludedHttpPath...)
+	}
 	hub.httpMetrics = hub.newHTTPMetrics()
 
 	go hub.run()
 
 	return hub
+}
+
+func (hub *MetricsHub) IsExcludedHttpPath(path string) bool {
+	if hub.config.ExcludedHttpPath == nil {
+		return false
+	}
+	return slices.Contains(hub.config.ExcludedHttpPath, path)
 }
 
 func (hub *MetricsHub) getFixedLabels() prometheus.Labels {

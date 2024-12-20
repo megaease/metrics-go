@@ -18,6 +18,9 @@ func NewGinMetricsCollector(hub *metricshub.MetricsHub) gin.HandlerFunc {
 		// Calculate processing time and extract request details
 		processTime := time.Since(startAt)
 		routePath := c.FullPath() // Use the registered router path directly
+		if hub.IsExcludedHttpPath(routePath) {
+			return
+		}
 		method := c.Request.Method
 		statusCode := c.Writer.Status()
 		bodyBytesReceived := c.Request.ContentLength

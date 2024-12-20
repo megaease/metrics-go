@@ -2,7 +2,6 @@ package middleware
 
 import (
 	echo "github.com/labstack/echo/v4"
-
 	"github.com/megaease/metrics-go/metricshub"
 	"github.com/megaease/metrics-go/utils/fasttime"
 )
@@ -19,6 +18,10 @@ func NewEchoMetricsCollector(hub *metricshub.MetricsHub) echo.MiddlewareFunc {
 			}
 			processTime := fasttime.Since(startAt)
 			path := ctx.Path()
+			if hub.IsExcludedHttpPath(path) {
+				return nil
+			}
+
 			method := ctx.Request().Method
 			code := ctx.Response().Status
 			bodyBytesReceived := ctx.Request().ContentLength
