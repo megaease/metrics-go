@@ -453,7 +453,7 @@ func (hub *MetricsHub) groupMetrics(reg *MetricRegistration, mergedLabels []stri
 		}
 		compositeKey := strings.Join(compositeKeyParts, ",")
 
-		value := hub.getMetricValue(m, reg.Type)
+		value := hub.GetMetricValue(m, reg.Type)
 		if _, exists := groupedValues[compositeKey]; !exists {
 			groupedValues[compositeKey] = value
 			groupedLabels[compositeKey] = newLabels
@@ -517,7 +517,7 @@ func (hub *MetricsHub) mergeMetrics(reg *MetricRegistration, mergedLabels []stri
 	return nil
 }
 
-func (hub *MetricsHub) getMetricValue(m *dto.Metric, metricType MetricType) float64 {
+func (hub *MetricsHub) GetMetricValue(m *dto.Metric, metricType MetricType) float64 {
 	switch metricType {
 	case MetricTypeGaugeVec:
 		return m.GetGauge().GetValue()
@@ -530,4 +530,87 @@ func (hub *MetricsHub) getMetricValue(m *dto.Metric, metricType MetricType) floa
 	default:
 		return 0
 	}
+}
+
+func (hub *MetricsHub) GetMetricCurrentValue(name string, labels map[string]string) (float64, error) {
+	metricReg, exists := hub.metricsRegistrations[name]
+	if !exists {
+		return 0, nil
+	}
+
+	if !hub.config.DisableFixedLabels {
+		for k, v := range hub.fixedLabels {
+			if _, exists := labels[k]; !exists {
+				labels[k] = v
+			}
+		}
+	}
+
+	metric := hub.GetCollector(name)
+	mfs := make(chan prometheus.Metric)
+	go func() {
+		metric.Collect(mfs)
+		close(mfs)
+	}()
+
+	if len(mfs) == 1 {
+		mf := <-mfs
+		m := &dto.Metric{}
+		err := mf.Write(m)
+		if err != nil {
+			return 0, err
+		}
+		return hub.GetMetricValue(m, metricReg.Type), nil
+	}
+
+	for mf := range mfs {
+		m := &dto.Metric{}
+		err := mf.Write(m)
+		if err != nil {
+			return 0, err
+		}
+
+		metricLabels := m.GetLabel()
+		match := true
+		for k, v := range labels {
+			found := false
+			for i := range metricLabels {
+				if metricLabels[i].GetName() == k && metricLabels[i].GetValue() == v {
+					found = true
+					break
+				}
+			}
+			if !found {
+				match = false
+				break
+			}
+		}
+
+		if match {
+			return hub.GetMetricValue(m, metricReg.Type), nil
+		}
+	}
+
+	return 0, nil
+}
+
+func (hub *MetricsHub) GetMetrics(name string) []*dto.Metric {
+	metric := hub.GetCollector(name)
+	mfs := make(chan prometheus.Metric)
+	go func() {
+		metric.Collect(mfs)
+		close(mfs)
+	}()
+
+	var metrics []*dto.Metric
+	for mf := range mfs {
+		m := &dto.Metric{}
+		err := mf.Write(m)
+		if err != nil {
+			return nil
+		}
+		metrics = append(metrics, m)
+	}
+
+	return metrics
 }
