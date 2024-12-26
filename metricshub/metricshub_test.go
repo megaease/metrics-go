@@ -147,4 +147,11 @@ func TestMergedMetrics2(t *testing.T) {
 		length++
 	}
 	assert.Equal(t, 6, length)
+
+	metrics := metricsHub.GetMetrics("example_gauge")
+	assert.Equal(t, 6, len(metrics))
+	for _, m := range metrics {
+		value := metricsHub.GetMetricValue(m, MetricTypeGaugeVec)
+		fmt.Printf("value: %f, labels: %v\n", value, m.GetLabel())
+	}
 }

@@ -261,6 +261,9 @@ func (hub *MetricsHub) CurrentMetrics() []string {
 // UpdateMetrics allows dynamic updates to a specific metric by its name.
 // Labels are optional and only used for *Vec types.
 func (hub *MetricsHub) UpdateMetrics(name string, value float64, labels map[string]string) error {
+	if labels == nil {
+		labels = make(map[string]string)
+	}
 	metricReg, exists := hub.metricsRegistrations[name]
 	if !exists {
 		return nil // RequestMetric not found
